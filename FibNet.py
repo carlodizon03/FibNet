@@ -183,7 +183,7 @@ class fibModule(nn.Module):
         return self.classifier[0](out)
 
 class FibNet(nn.Module):
-    def __init__(self, in_channels = 3, out_channels = 1, num_blocks = 8, block_depth = 5):
+    def __init__(self, in_channels = 3, out_channels = 1, num_blocks = 8, block_depth = 5, pretrained = False):
         super().__init__()
 
         self.in_channels = in_channels
