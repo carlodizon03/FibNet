@@ -17,16 +17,17 @@ import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 from FibNet import FibNet
-
-model_names = "FibNEt"
+from logger import logger
+model_names = "FibNet"
+log = logger.Create("logs/")
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 parser.add_argument('data', metavar='DIR',
                     help='path to dataset')
-parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet18',
+parser.add_argument('-a', '--arch', metavar='ARCH', default='FibNet',
                     choices=model_names,
                     help='model architecture: ' +
                         ' | '.join(model_names) +
-                        ' (default: FibNEt)')
+                        ' (default: FibNet)')
 parser.add_argument('--nb', '--n-blocks', default=8, type=int, 
                     help='number of fibNet blocks', dest='n_blocks')
 parser.add_argument('--bd', '--block-depth', default=3, type=int, 
@@ -76,7 +77,7 @@ parser.add_argument('--multiprocessing-distributed', action='store_true',
                          'multi node data parallel training')
 
 best_acc1 = 0
-
+train_steps = 0
 
 def main():
     args = parser.parse_args()
@@ -115,6 +116,7 @@ def main():
 
 def main_worker(gpu, ngpus_per_node, args):
     global best_acc1
+    global train_steps
     args.gpu = gpu
 
     if args.gpu is not None:
@@ -132,10 +134,10 @@ def main_worker(gpu, ngpus_per_node, args):
     # create model
     if args.pretrained:
         print("=> using pre-trained model '{}'".format(args.arch))
-        model = FibNet(num_blocks = args.n_blocks, depth = args.block_depth,pretrained=True)
+        model = FibNet(in_channels = 3, out_channels = 1000, num_blocks = args.n_blocks, block_depth = args.block_depth,pretrained=True)
     else:
         print("=> creating model '{}'".format(args.arch))
-        model =  FibNet(num_blocks = args.n_blocks, depth = args.block_depth,pretrained=False)
+        model =  FibNet(in_channels = 3, out_channels = 1000, num_blocks = args.n_blocks, block_depth = args.block_depth,pretrained=False)
 
     if not torch.cuda.is_available():
         print('using CPU, this will be slow')
@@ -187,6 +189,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 checkpoint = torch.load(args.resume, map_location=loc)
             args.start_epoch = checkpoint['epoch']
             best_acc1 = checkpoint['best_acc1']
+            train_steps = checkpoint['train_steps']
             if args.gpu is not None:
                 # best_acc1 may be from a checkpoint from a different GPU
                 best_acc1 = best_acc1.to(args.gpu)
@@ -243,7 +246,7 @@ def main_worker(gpu, ngpus_per_node, args):
         adjust_learning_rate(optimizer, epoch, args)
 
         # train for one epoch
-        train(train_loader, model, criterion, optimizer, epoch, args)
+        train_steps =train(train_loader, model, criterion, optimizer, epoch, train_steps, args)
 
         # evaluate on validation set
         acc1 = validate(val_loader, model, criterion, args)
@@ -260,10 +263,10 @@ def main_worker(gpu, ngpus_per_node, args):
                 'state_dict': model.state_dict(),
                 'best_acc1': best_acc1,
                 'optimizer' : optimizer.state_dict(),
+                'train_steps':train_steps
             }, is_best)
 
-
-def train(train_loader, model, criterion, optimizer, epoch, args):
+def train(train_loader, model, criterion, optimizer, epoch, train_steps, args):
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
@@ -278,6 +281,7 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
     model.train()
 
     end = time.time()
+
     for i, (images, target) in enumerate(train_loader):
         # measure data loading time
         data_time.update(time.time() - end)
@@ -296,6 +300,9 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
         losses.update(loss.item(), images.size(0))
         top1.update(acc1[0], images.size(0))
         top5.update(acc5[0], images.size(0))
+        train_steps+=1
+        log.top1(acc1[0],train_steps)
+        log.top5(acc5[0],train_steps)
 
         # compute gradient and do SGD step
         optimizer.zero_grad()
@@ -308,7 +315,7 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
 
         if i % args.print_freq == 0:
             progress.display(i)
-
+    return train_steps
 
 def validate(val_loader, model, criterion, args):
     batch_time = AverageMeter('Time', ':6.3f')
