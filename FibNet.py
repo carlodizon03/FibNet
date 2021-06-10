@@ -153,7 +153,6 @@ class fibModule(nn.Module):
             
             #fconv
             out = self.encoder[block*self.block_depth*2+1](x)
-            out = self.dropOut2(out)
             for layer in range(1,self.block_depth):
 
                 #fcat
@@ -167,7 +166,6 @@ class fibModule(nn.Module):
 
                 #fconv
                 out  = self.encoder[block*self.block_depth*2+(layer*2)+1](in2)
-                out = self.dropOut2(out)
 
                 #identity of ld-1
                 if layer == self.block_depth-1:
@@ -175,7 +173,6 @@ class fibModule(nn.Module):
 
                     if(block == self.num_blocks-1):
                         out = self.transition[block](out)
-                        out = self.dropOut1(out)
 
                     else:
                         x = self.transition[block](out)
@@ -201,4 +198,19 @@ class FibNet(nn.Module):
         inputs = self.drop(inputs)
         outputs = self.encoder(inputs)
         return outputs
+# from torchsummary import  summary
+# from ptflops import get_model_complexity_info
+# """Load Cuda """
+# use_cuda = torch.cuda.is_available()
+# device = torch.device("cuda:0" if use_cuda else "cpu")
+# torch.backends.cudnn.benchmark = True
+# """"""""""""""""""
 
+# f = FibNet(in_channels=3,out_channels=1000, num_blocks=5, block_depth=5)
+# f.to(device)
+# summary(f,(3,224,224))
+# macs, params = get_model_complexity_info(f, (3, 224, 224), as_strings=True,
+#                                         print_per_layer_stat=False, verbose=False)
+# print()
+# print('{:<30}  {:<8}'.format('Computational complexity: ', macs))
+# print('{:<30}  {:<8}'.format('Number of parameters: ', params))
