@@ -16,6 +16,7 @@ import torch.utils.data
 import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
+import torch.nn.init as init
 from FibNet import FibNet
 from logger import logger
 model_names = "FibNet"
@@ -113,6 +114,16 @@ def main():
         # Simply call main_worker function
         main_worker(args.gpu, ngpus_per_node, args)
 
+def weights_init(m):
+        for key in m.state_dict():
+            if key.split('.')[-1] == 'weight':
+                if 'conv' in key:
+                    init.xavier_normal_(m.state_dict()[key])
+                if 'bn' in key:
+                    m.state_dict()[key][...] = 1
+            elif key.split('.')[-1] == 'bias':
+                m.state_dict()[key][...] = 0
+
 
 def main_worker(gpu, ngpus_per_node, args):
     global best_acc1
@@ -199,7 +210,8 @@ def main_worker(gpu, ngpus_per_node, args):
                   .format(args.resume, checkpoint['epoch']))
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
-
+    elif not args.pretrained:
+        model.apply(weights_init)
     cudnn.benchmark = True
 
     # Data loading code
