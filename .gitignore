@@ -2,3 +2,4 @@ data/*
 logs/*
 weights/*
 checkpoints/*
+param.txt
