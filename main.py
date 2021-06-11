@@ -210,8 +210,8 @@ def main_worker(gpu, ngpus_per_node, args):
                   .format(args.resume, checkpoint['epoch']))
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
-    elif not args.pretrained:
-        model.apply(weights_init)
+#    elif not args.pretrained:
+#        model.apply(weights_init)
     cudnn.benchmark = True
 
     # Data loading code

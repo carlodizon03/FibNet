@@ -88,7 +88,7 @@ class fibModule(nn.Module):
             while depth_ > 0:
                 val = int( (block * ratio_ * (1 - ratio_))*100)
                 channel_list.append(val)
-                ratio_ = self.logistic(3.414, ratio_)
+                ratio_ = self.logistic(1.2, ratio_)
                 #1.2-3.26gmac
                 depth_ -= 1
                 ratio_list.append(ratio_)
