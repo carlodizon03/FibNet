@@ -83,7 +83,7 @@ class fibModule(nn.Module):
         channel_list =[in_channels]
         ratio_list = [ratio]
         blocks = [i*5 for i in blocks]
-        print(blocks)
+#        print(blocks)
         for block in blocks:
             depth_ = depth
             ratio_ = ratio 
