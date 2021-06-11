@@ -1,4 +1,5 @@
 import argparse
+from logging import Logger
 import os
 import random
 import shutil
@@ -7,32 +8,41 @@ import warnings
 
 import torch
 import torch.nn as nn
-import torch.nn.parallel
 import torch.backends.cudnn as cudnn
-import torch.distributed as dist
-import torch.optim
-import torch.multiprocessing as mp
-import torch.utils.data
-import torch.utils.data.distributed
-import torchvision.transforms as transforms
+
+import torch.optim as optim
+import torchvision
 import torchvision.datasets as datasets
+import torchvision.transforms as transforms
+import torch.utils.data
 import torch.nn.init as init
-from FibNet import FibNet, init_weights
+
+import matplotlib.pyplot as plt
+import numpy as np
+
 from logger import logger
-model_names = "FibNet"
-log = logger.Create("logs/")
+
+model_names = ["FibNet", "MobileNetv2", "HaRD-Net", "DenseNet", "ResNet"]
+dataset_choices = ["imagenet", "cifar100"]
+
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 parser.add_argument('data', metavar='DIR',
                     help='path to dataset')
+
 parser.add_argument('-a', '--arch', metavar='ARCH', default='FibNet',
                     choices=model_names,
                     help='model architecture: ' +
                         ' | '.join(model_names) +
                         ' (default: FibNet)')
+parser.add_argument('--ds', '--dataset_name', type = str, dest = 'dataset_name', default = 'Imagenet',
+                    help = 'Name of dataset to be used.',
+                    choices = dataset_choices)
 parser.add_argument('--nb', '--n-blocks', default=8, type=int, 
                     help='number of fibNet blocks', dest='n_blocks')
 parser.add_argument('--bd', '--block-depth', default=3, type=int, 
                     help='FibNet Block Depth', dest='block_depth' )
+parser.add_argument('--cl', '--num_class', default=100, type=int, 
+                    help='Number of Class', dest='num_class' )
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
 parser.add_argument('--epochs', default=90, type=int, metavar='N',
@@ -59,30 +69,29 @@ parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
 parser.add_argument('--pretrained', dest='pretrained', action='store_true',
                     help='use pre-trained model')
-parser.add_argument('--world-size', default=-1, type=int,
-                    help='number of nodes for distributed training')
-parser.add_argument('--rank', default=-1, type=int,
-                    help='node rank for distributed training')
-parser.add_argument('--dist-url', default='tcp://224.66.41.62:23456', type=str,
-                    help='url used to set up distributed training')
-parser.add_argument('--dist-backend', default='nccl', type=str,
-                    help='distributed backend')
 parser.add_argument('--seed', default=None, type=int,
                     help='seed for initializing training. ')
 parser.add_argument('--gpu', default=None, type=int,
                     help='GPU id to use.')
-parser.add_argument('--multiprocessing-distributed', action='store_true',
-                    help='Use multi-processing distributed training to launch '
-                         'N processes per node, which has N GPUs. This is the '
-                         'fastest way to use PyTorch for either single node or '
-                         'multi node data parallel training')
+parser.add_argument('--log_path', default = None, type = str, dest = "log_path",
+                        help='Sets the tensorboard logging.')
+
+
+
+
+
+
+
+
+
 
 best_acc1 = 0
 train_steps = 0
-
 def main():
     args = parser.parse_args()
-
+    
+    if args.log_path is not None:
+        log = logger.Create(os.path.join(args.log_path,args.arch))
     if args.seed is not None:
         random.seed(args.seed)
         torch.manual_seed(args.seed)
@@ -92,37 +101,23 @@ def main():
                       'which can slow down your training considerably! '
                       'You may see unexpected behavior when restarting '
                       'from checkpoints.')
-
     if args.gpu is not None:
-        warnings.warn('You have chosen a specific GPU. This will completely '
-                      'disable data parallelism.')
+        warnings.warn('You have chosen a specific GPU.')
 
-    if args.dist_url == "env://" and args.world_size == -1:
-        args.world_size = int(os.environ["WORLD_SIZE"])
-
-    args.distributed = args.world_size > 1 or args.multiprocessing_distributed
-
-    ngpus_per_node = torch.cuda.device_count()
-    if args.multiprocessing_distributed:
-        # Since we have ngpus_per_node processes per node, the total world_size
-        # needs to be adjusted accordingly
-        args.world_size = ngpus_per_node * args.world_size
-        # Use torch.multiprocessing.spawn to launch distributed processes: the
-        # main_worker process function
-        mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
-    else:
-        # Simply call main_worker function
-        main_worker(args.gpu, ngpus_per_node, args)
+    main_worker(args.gpu, log, args)
 
 def init_weights(m):
-    if type(m) == nn.Conv2d:
-        torch.nn.init.xavier_uniform(m.weight)
+    if isinstance(m, nn.Conv2d):
+        nn.init.xavier_normal_(m.weight, gain = nn.init.calculate_gain('relu'))
         if m.bias is not None:
             torch.nn.init.zeros_(m.bias)
-    if type(m) == nn.BatchNorm2d:
+    if isinstance(m,nn.BatchNorm2d):
         torch.nn.init.ones_(m.weight)
+    elif isinstance(m, nn.Linear):
+        nn.init.xavier_normal_(m.weight, gain = nn.init.calculate_gain('relu'))
+        torch.nn.init.zeros_(m.bias)     
 
-def main_worker(gpu, ngpus_per_node, args):
+def main_worker(gpu, log, args):
     global best_acc1
     global train_steps
     args.gpu = gpu
@@ -130,53 +125,32 @@ def main_worker(gpu, ngpus_per_node, args):
     if args.gpu is not None:
         print("Use GPU: {} for training".format(args.gpu))
 
-    if args.distributed:
-        if args.dist_url == "env://" and args.rank == -1:
-            args.rank = int(os.environ["RANK"])
-        if args.multiprocessing_distributed:
-            # For multiprocessing distributed training, rank needs to be the
-            # global rank among all the processes
-            args.rank = args.rank * ngpus_per_node + gpu
-        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
-                                world_size=args.world_size, rank=args.rank)
     # create model
-    if args.pretrained:
-        print("=> using pre-trained model '{}'".format(args.arch))
-        model = FibNet(in_channels = 3, out_channels = 1000, num_blocks = args.n_blocks, block_depth = args.block_depth,pretrained=True)
-    else:
-        print("=> creating model '{}'".format(args.arch))
-        model =  FibNet(in_channels = 3, out_channels = 1000, num_blocks = args.n_blocks, block_depth = args.block_depth,pretrained=False)
+    
+    #TODO: work on this code block to enable using pretrained weights.
+    # if args.pretrained:
+    #     print("=> using pre-trained model '{}'".format(args.arch))
+    #     if args.arch == "FibNet":
+    #         from models.FibNet import FibNet
+    #         model = FibNet(in_channels = 3, out_channels = args.num_class, num_blocks = args.n_blocks, block_depth = args.block_depth, pretrained=True)
+    #     elif args.arch == "MobileNetv2":
+    #         from models.MobileNetv2 import MobileNetv2
+    #         model = MobileNetv2(args.num_class)            
+        # else:
+
+    print("=> creating model '{}'".format(args.arch))
+    if args.arch == "FibNet":
+        from models.FibNet import FibNet
+        model = FibNet(in_channels = 3, out_channels = args.num_class, num_blocks = args.n_blocks, block_depth = args.block_depth, pretrained=False)
+    elif args.arch == "MobileNetv2":
+        from models.MobileNetv2 import MobileNetv2
+        model = MobileNetv2(args.num_class)      
 
     if not torch.cuda.is_available():
         print('using CPU, this will be slow')
-    elif args.distributed:
-        # For multiprocessing distributed, DistributedDataParallel constructor
-        # should always set the single device scope, otherwise,
-        # DistributedDataParallel will use all available devices.
-        if args.gpu is not None:
-            torch.cuda.set_device(args.gpu)
-            model.cuda(args.gpu)
-            # When using a single GPU per process and per
-            # DistributedDataParallel, we need to divide the batch size
-            # ourselves based on the total number of GPUs we have
-            args.batch_size = int(args.batch_size / ngpus_per_node)
-            args.workers = int((args.workers + ngpus_per_node - 1) / ngpus_per_node)
-            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
-        else:
-            model.cuda()
-            # DistributedDataParallel will divide and allocate batch_size to all
-            # available GPUs if device_ids are not set
-            model = torch.nn.parallel.DistributedDataParallel(model)
     elif args.gpu is not None:
         torch.cuda.set_device(args.gpu)
         model = model.cuda(args.gpu)
-    else:
-        # DataParallel will divide and allocate batch_size to all available GPUs
-        if args.arch.startswith('alexnet') or args.arch.startswith('vgg'):
-            model.features = torch.nn.DataParallel(model.features)
-            model.cuda()
-        else:
-            model = torch.nn.DataParallel(model).cuda()
 
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda(args.gpu)
@@ -207,60 +181,64 @@ def main_worker(gpu, ngpus_per_node, args):
                   .format(args.resume, checkpoint['epoch']))
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
-<<<<<<< HEAD
-#    elif not args.pretrained:
-#        model.apply(weights_init)
-=======
-    elif not args.pretrained:
-        model.apply(init_weights)
->>>>>>> d8ab00617978284ef397f0de7d490dc221585285
+
     cudnn.benchmark = True
 
     # Data loading code
-    traindir = os.path.join(args.data, 'train')
-    valdir = os.path.join(args.data, 'val')
-    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+    if args.dataset_name == "imagenet":
+        traindir = os.path.join(args.data, 'train')
+        valdir = os.path.join(args.data, 'val')
+        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
-
-    train_dataset = datasets.ImageFolder(
-        traindir,
-        transforms.Compose([
-            transforms.RandomResizedCrop(224),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            normalize,
-        ]))
-
-    if args.distributed:
-        train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
-    else:
+        train_dataset = datasets.ImageFolder(
+                        traindir,
+                        transforms.Compose([
+                            transforms.RandomResizedCrop(224),
+                            transforms.RandomHorizontalFlip(),
+                            transforms.ToTensor(),
+                            normalize,
+                        ]))
         train_sampler = None
 
-    train_loader = torch.utils.data.DataLoader(
+        train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
         num_workers=args.workers, pin_memory=True, sampler=train_sampler)
 
-    val_loader = torch.utils.data.DataLoader(
-        datasets.ImageFolder(valdir, transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            normalize,
-        ])),
-        batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True)
+        val_loader = torch.utils.data.DataLoader(
+            datasets.ImageFolder(valdir, transforms.Compose([
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
+                transforms.ToTensor(),
+                normalize,
+            ])),
+            batch_size=args.batch_size, shuffle=False,
+            num_workers=args.workers, pin_memory=True)
+
+    elif args.dataset_name == "cifar100":
+        transform = transforms.Compose(
+                        [transforms.ToTensor(),transforms.Resize(64),
+                        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+                        ])
+
+        trainset = datasets.CIFAR100(root = args.data, train = True, transform = transform ,download = True)
+        testset = datasets.CIFAR100(root =  args.data, train = False, transform = transform ,download = True)
+
+        train_loader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size,
+                                                shuffle=True, num_workers=args.workers,
+                                                pin_memory=True)
+        val_loader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size,
+                                                shuffle=False,  num_workers=args.workers, 
+                                                pin_memory=True)  
 
     if args.evaluate:
         validate(val_loader, model, criterion, args)
-        return
-
+        return   
+    
     for epoch in range(args.start_epoch, args.epochs):
-        if args.distributed:
-            train_sampler.set_epoch(epoch)
         adjust_learning_rate(optimizer, epoch, args)
 
         # train for one epoch
-        train_steps =train(train_loader, model, criterion, optimizer, epoch, train_steps, args)
+        train_steps =train(train_loader, model, criterion, optimizer, epoch, train_steps, log, args)
 
         # evaluate on validation set
         acc1 = validate(val_loader, model, criterion, args)
@@ -268,19 +246,17 @@ def main_worker(gpu, ngpus_per_node, args):
         # remember best acc@1 and save checkpoint
         is_best = acc1 > best_acc1
         best_acc1 = max(acc1, best_acc1)
-
-        if not args.multiprocessing_distributed or (args.multiprocessing_distributed
-                and args.rank % ngpus_per_node == 0):
-            save_checkpoint({
+                                            
+        save_checkpoint({
                 'epoch': epoch + 1,
                 'arch': args.arch,
                 'state_dict': model.state_dict(),
                 'best_acc1': best_acc1,
                 'optimizer' : optimizer.state_dict(),
                 'train_steps':train_steps
-            }, is_best)
+            }, is_best, args.arch)
 
-def train(train_loader, model, criterion, optimizer, epoch, train_steps, args):
+def train(train_loader, model, criterion, optimizer, epoch, train_steps, log, args):
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
@@ -315,8 +291,9 @@ def train(train_loader, model, criterion, optimizer, epoch, train_steps, args):
         top1.update(acc1[0], images.size(0))
         top5.update(acc5[0], images.size(0))
         train_steps+=1
-        log.top1(acc1[0],train_steps)
-        log.top5(acc5[0],train_steps)
+        if(args.log_path is not None):
+            log.top1(acc1[0],train_steps)
+            log.top5(acc5[0],train_steps)
 
         # compute gradient and do SGD step
         optimizer.zero_grad()
@@ -330,6 +307,7 @@ def train(train_loader, model, criterion, optimizer, epoch, train_steps, args):
         if i % args.print_freq == 0:
             progress.display(i)
     return train_steps
+
 
 def validate(val_loader, model, criterion, args):
     batch_time = AverageMeter('Time', ':6.3f')
@@ -376,10 +354,12 @@ def validate(val_loader, model, criterion, args):
     return top1.avg
 
 
-def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
-    torch.save(state, filename)
+def save_checkpoint(state, is_best, model_name, filename='checkpoint.pth.tar'):
+    checkpoint_fp =  os.path.join("checkpoints", os.path.join(model_name,filename))
+    weights_fp  = os.path.join("weights", os.path.join(model_name,filename))
+    torch.save(state, checkpoint_fp)
     if is_best:
-        shutil.copyfile(filename, 'model_best.pth.tar')
+        shutil.copyfile(checkpoint_fp, weights_fp)
 
 
 class AverageMeter(object):
@@ -445,7 +425,6 @@ def accuracy(output, target, topk=(1,)):
             correct_k = correct[:k].reshape(-1).float().sum(0, keepdim=True)
             res.append(correct_k.mul_(100.0 / batch_size))
         return res
-
 
 if __name__ == '__main__':
     main()
