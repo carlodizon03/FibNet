@@ -5,6 +5,7 @@ import shutil
 import time
 import warnings
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.parallel
@@ -419,7 +420,8 @@ class ProgressMeter(object):
 
 def adjust_learning_rate(optimizer, epoch, args):
     """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
-    lr = args.lr * (0.1 ** (epoch // 30))
+    #Cosine learning rate decay
+    lr = 0.5 * args.lr  * (1 + np.cos(np.pi * (epoch)/ args.epochs ))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
