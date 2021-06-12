@@ -16,7 +16,6 @@ import torch.utils.data
 import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-import torch.nn.init as init
 from FibNet import FibNet
 from logger import logger
 model_names = "FibNet"
@@ -179,14 +178,11 @@ def main_worker(gpu, ngpus_per_node, args):
             model = torch.nn.DataParallel(model).cuda()
 
     # define loss function (criterion) and optimizer
+    criterion = nn.CrossEntropyLoss().cuda(args.gpu)
 
-
-    criterion = nn.CrossEntropyLoss().cuda(0)
-
-    optimizer = torch.optim.SGD(model.parameters(),
-                                learning_rate= 0.05,
-                                momentum= 0.9,
-                                weight_decay= 1e-4)
+    optimizer = torch.optim.SGD(model.parameters(), args.lr,
+                                momentum=args.momentum,
+                                weight_decay=args.weight_decay)
 
     # optionally resume from a checkpoint
     if args.resume:
