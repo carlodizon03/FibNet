@@ -17,7 +17,7 @@ import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import torch.nn.init as init
-from FibNet import FibNet, init_weights
+from FibNet import FibNet
 from logger import logger
 model_names = "FibNet"
 log = logger.Create("logs/")
