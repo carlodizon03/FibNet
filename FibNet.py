@@ -83,7 +83,7 @@ class fibModule(nn.Module):
     def naive_block_channels_variation(self, blocks, in_channels = 5,  depth = 5, ratio = 0.618):
         channel_list =[in_channels]
         ratio_list = [ratio]
-        blocks = [i*2 for i in blocks]
+        # blocks = [i*2 for i in blocks]
 #        print(blocks)
         for block in blocks:
             depth_ = depth
@@ -128,11 +128,11 @@ class fibModule(nn.Module):
                 in_channels = blocks_channel_list[idx] + blocks_channel_list[idx-1]
                 out_channels = blocks_channel_list[idx+1]
 
-                #TODO:determine which is more effective
-                # if layer >2:
-                #     kernel_size = 1
-                # else:
-                kernel_size = 3
+                # TODO:determine which is more effective
+                if layer >2:
+                    kernel_size = 1
+                else:
+                    kernel_size = 3
 
                 #Conv2d to match the shape for concatenation
                 if(use_conv_cat):
