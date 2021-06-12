@@ -55,9 +55,10 @@ class fibModule(nn.Module):
         self.out_channels = out_channels
         self.num_blocks = num_blocks
         self.block_depth = block_depth
+        self.use_conv_cat = use_conv_cat
         self.dropOut1 = nn.Dropout(0.1)
         self.dropOut2 = nn.Dropout(0.2)
-        self.encoder,self.transition, self.classifier = self.build(in_channels = self.in_channels, num_blocks = self.num_blocks, block_depth = self.block_depth)
+        self.encoder,self.transition, self.classifier = self.build(in_channels = self.in_channels, num_blocks = self.num_blocks, block_depth = self.block_depth, use_conv_cat = self.use_conv_cat)
 
     def fibonacci(self,depth):
         f = []
@@ -82,7 +83,7 @@ class fibModule(nn.Module):
     def naive_block_channels_variation(self, blocks, in_channels = 5,  depth = 5, ratio = 0.618):
         channel_list =[in_channels]
         ratio_list = [ratio]
-        blocks = [i*5 for i in blocks]
+        blocks = [i*2 for i in blocks]
 #        print(blocks)
         for block in blocks:
             depth_ = depth
@@ -170,7 +171,6 @@ class fibModule(nn.Module):
 
             #fconv
             out = self.encoder[block*self.block_depth*2+1](x)
-            # out = self.dropOut1(out)
             for layer in range(1,self.block_depth):
                 # print(out.shape, cat_out.shape)
                 #fcat
@@ -184,7 +184,6 @@ class fibModule(nn.Module):
 
                 #fconv
                 out  = self.encoder[block*self.block_depth*2+(layer*2)+1](in2)
-                # out = self.dropOut1(out)
 
                 #identity of ld-1
                 if layer == self.block_depth-1:
@@ -207,16 +206,17 @@ class FibNet(nn.Module):
         self.out_channels = out_channels
         self.num_blocks  = num_blocks
         self.block_depth = block_depth
+        self.use_conv_cat = use_conv_cat
         self.drop = nn.Dropout(0.05)
-        self.conv1 = ConvLayer(3,32,3,2)
-        # self.conv2 = ConvLayer(8,16,3,2)
-        self.encoder = fibModule(in_channels = 32, out_channels = self.out_channels ,num_blocks = self.num_blocks, block_depth = self.block_depth, use_conv_cat = True)
+        self.conv1 = ConvLayer(3,16,3,2)
+        self.conv2 = ConvLayer(16,32,3,2)
+        self.encoder = fibModule(in_channels = 32, out_channels = self.out_channels ,num_blocks = self.num_blocks, block_depth = self.block_depth, use_conv_cat = self.use_conv_cat)
         self._initialize_weights()
 
     def forward(self, inputs):
         inputs = self.conv1(inputs)
-        # inputs = self.drop(inputs)
-        # inputs = self.conv2(inputs)
+        inputs = self.drop(inputs)
+        inputs = self.conv2(inputs)
         inputs = self.drop(inputs)
         outputs = self.encoder(inputs)
         return outputs
@@ -242,10 +242,10 @@ class FibNet(nn.Module):
 # torch.backends.cudnn.benchmark = True
 # """"""""""""""""""
 
-# f = FibNet(in_channels=3,out_channels=100, num_blocks=3, block_depth=3)
+# f = FibNet(in_channels=3,out_channels=1000, num_blocks=5, block_depth=5, use_conv_cat=False)
 # f.to(device)
-# summary(f,(3,64,64))
-# macs, params = get_model_complexity_info(f, (3, 64, 64), as_strings=True,
+# summary(f,(3,224,224))
+# macs, params = get_model_complexity_info(f, (3, 224, 224), as_strings=True,
 #                                         print_per_layer_stat=False, verbose=False)
 # print()
 # print('{:<30}  {:<8}'.format('Computational complexity: ', macs))
