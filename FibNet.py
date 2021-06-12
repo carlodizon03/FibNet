@@ -234,19 +234,3 @@ class FibNet(nn.Module):
             elif isinstance(m, nn.Linear):
                 m.weight.data.normal_(0, 0.01)
                 m.bias.data.zero_()
-# from torchsummary import  summary
-# from ptflops import get_model_complexity_info
-# """Load Cuda """
-# use_cuda = torch.cuda.is_available()
-# device = torch.device("cuda:0" if use_cuda else "cpu")
-# torch.backends.cudnn.benchmark = True
-# """"""""""""""""""
-
-# f = FibNet(in_channels=3,out_channels=1000, num_blocks=5, block_depth=5, use_conv_cat=False)
-# f.to(device)
-# summary(f,(3,224,224))
-# macs, params = get_model_complexity_info(f, (3, 224, 224), as_strings=True,
-#                                         print_per_layer_stat=False, verbose=False)
-# print()
-# print('{:<30}  {:<8}'.format('Computational complexity: ', macs))
-# print('{:<30}  {:<8}'.format('Number of parameters: ', params))
