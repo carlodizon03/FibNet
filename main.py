@@ -90,10 +90,10 @@ def main():
 
     # get args from yaml config file
     if not args.args:
-        opts = vars(args)
+        opt = vars(args)
         args = yaml.load(open(args.config), Loader=yaml.FullLoader)
-        opts.update(args)
-        args = opts
+        opt.update(args)
+        args = opt
     # get from manual argument input and save as a config file
     else:
         fname = str(args.arch)+str(args.n_blocks)+'x'+str(args.block_depth)+'.yml'
