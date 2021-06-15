@@ -4,7 +4,7 @@ import random
 import shutil
 import time
 import warnings
-
+import yaml
 import numpy as np
 import torch
 import torch.nn as nn
@@ -17,11 +17,15 @@ import torch.utils.data
 import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-from FibNet import FibNet
+from models.FibNet import FibNet
 from logger import logger
 model_names = "FibNet"
 log = logger.Create("logs/")
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
+
+parser.add_argument('-config', help="configuration file *.yml", type=str, required=False, default='configs\config.yml')
+parser.add_argument('-args', help="Manual inpug of arguments", type=bool, required=False, default=False)
+
 parser.add_argument('data', metavar='DIR',
                     help='path to dataset')
 parser.add_argument('-a', '--arch', metavar='ARCH', default='FibNet',
@@ -33,6 +37,7 @@ parser.add_argument('--nb', '--n-blocks', default=8, type=int,
                     help='number of fibNet blocks', dest='n_blocks')
 parser.add_argument('--bd', '--block-depth', default=3, type=int, 
                     help='FibNet Block Depth', dest='block_depth' )
+parser.add_argument('--cc', type = bool, default= True, help='use convolution contat', dest='use_conv_cat')
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
 parser.add_argument('--epochs', default=90, type=int, metavar='N',
@@ -83,6 +88,19 @@ train_steps = 0
 def main():
     args = parser.parse_args()
 
+    # get args from yaml config file
+    if not args.args:
+        opts = vars(args)
+        args = yaml.load(open(args.config), Loader=yaml.FullLoader)
+        opts.update(args)
+        args = opts
+    # get from manual argument input and save as a config file
+    else:
+        fname = str(args.arch)+str(args.n_blocks)+'x'+str(args.block_depth)+'.yml'
+        with open(os.path.join("configs", fname), 'w') as ymlConfig:
+            yaml.dump(args.__dict__, ymlConfig, default_flow_style=False)
+        print("=> new config file saved as", fname)
+
     if args.seed is not None:
         random.seed(args.seed)
         torch.manual_seed(args.seed)
@@ -114,14 +132,6 @@ def main():
         # Simply call main_worker function
         main_worker(args.gpu, ngpus_per_node, args)
 
-def init_weights(m):
-    if type(m) == nn.Conv2d:
-        torch.nn.init.xavier_uniform(m.weight)
-        if m.bias is not None:
-            torch.nn.init.zeros_(m.bias)
-    if type(m) == nn.BatchNorm2d:
-        torch.nn.init.ones_(m.weight)
-
 def main_worker(gpu, ngpus_per_node, args):
     global best_acc1
     global train_steps
@@ -142,10 +152,10 @@ def main_worker(gpu, ngpus_per_node, args):
     # create model
     if args.pretrained:
         print("=> using pre-trained model '{}'".format(args.arch))
-        model = FibNet(in_channels = 3, out_channels = 1000, num_blocks = args.n_blocks, block_depth = args.block_depth,pretrained=True)
+        model = FibNet(in_channels = 3, out_channels = 1000, num_blocks = args.n_blocks, block_depth = args.block_depth,pretrained=True, use_conv_cat=args.use_conv_cat)
     else:
         print("=> creating model '{}'".format(args.arch))
-        model =  FibNet(in_channels = 3, out_channels = 1000, num_blocks = args.n_blocks, block_depth = args.block_depth,pretrained=False)
+        model =  FibNet(in_channels = 3, out_channels = 1000, num_blocks = args.n_blocks, block_depth = args.block_depth,pretrained=False, use_conv_cat=args.use_conv_cat)
 
     if not torch.cuda.is_available():
         print('using CPU, this will be slow')
@@ -207,8 +217,6 @@ def main_worker(gpu, ngpus_per_node, args):
                   .format(args.resume, checkpoint['epoch']))
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
-    # elif not args.pretrained:
-    #     model.apply(init_weights)
     cudnn.benchmark = True
 
     # Data loading code
@@ -371,10 +379,12 @@ def validate(val_loader, model, criterion, args):
     return top1.avg
 
 
-def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
-    torch.save(state, filename)
+def save_checkpoint(state, is_best, args, filename='checkpoint.pth.tar'):
+    model_fn = str(args.arch)+str(args.n_blocks)+'x'+str(args.block_depth)
+    model_fp = os.path.join('checkpoints', model_fn+'_'+filename)
+    torch.save(state, model_fp)
     if is_best:
-        shutil.copyfile(filename, 'model_best.pth.tar')
+        shutil.copyfile(filename, os.path.join('weights',model_fn+'_'+'model_best.pth.tar'))
 
 
 class AverageMeter(object):
