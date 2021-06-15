@@ -1,6 +1,6 @@
 arch: FibNet
 args: true
-batch_size: 250
+batch_size: 64
 block_depth: 5
 n_blocks: 8
 data: ./ILSVRC/Data/CLS-LOC/
