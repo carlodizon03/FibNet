@@ -34,7 +34,7 @@ class out_view(nn.Sequential):
 
 
 class classifier(nn.Sequential):
-    def __init__(self, in_channels, out_channels, hidden_channels = 720):
+    def __init__(self, in_channels, out_channels, hidden_channels = 1280):
         super().__init__()
         self.add_module('pointwise',nn.Conv2d(in_channels = in_channels, out_channels = hidden_channels, kernel_size = 1, stride = 1, padding = 0, bias = False))
         self.add_module('pw_bn',nn.BatchNorm2d(hidden_channels))
@@ -142,7 +142,7 @@ class fibModule(nn.Module):
                                             name = 'block_'+str(block)+'_layer_'+str(layer)+'_cat_'))
                 #use Maxpooling
                 else:
-                    encoder.append(nn.MaxPool2d((3,3),1))
+                    encoder.append(nn.MaxPool2d(kernel_size,1))
 
                 encoder.append(ConvLayer(in_channels = in_channels,
                                         out_channels = out_channels,
@@ -165,14 +165,13 @@ class fibModule(nn.Module):
     def forward(self, inputs):
         x = inputs 
         for block in range(self.num_blocks):
-
+            
             #fdrc
             cat_out = self.encoder[block*self.block_depth*2](x)
 
             #fconv
             out = self.encoder[block*self.block_depth*2+1](x)
             for layer in range(1,self.block_depth):
-                # print(out.shape, cat_out.shape)
                 #fcat
                 in2 = torch.cat((out,cat_out),1)
                 
@@ -234,4 +233,3 @@ class FibNet(nn.Module):
             elif isinstance(m, nn.Linear):
                 m.weight.data.normal_(0, 0.01)
                 m.bias.data.zero_()
-
