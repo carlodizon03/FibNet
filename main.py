@@ -27,7 +27,7 @@ parser.add_argument('-config', help="configuration file *.yml", type=str, requir
 parser.add_argument('-args', help="Manual inpug of arguments", type=bool, required=False, default=False)
 
 parser.add_argument('data', metavar='DIR',
-                    help='path to dataset')
+                    help='path to dataset', default='./ILSVRC/Data/CLS-LOC/')
 parser.add_argument('-a', '--arch', metavar='ARCH', default='FibNet',
                     choices=model_names,
                     help='model architecture: ' +
