@@ -34,7 +34,7 @@ class out_view(nn.Sequential):
 
 
 class classifier(nn.Sequential):
-    def __init__(self, in_channels, out_channels, hidden_channels = 720):
+    def __init__(self, in_channels, out_channels, hidden_channels = 1280):
         super().__init__()
         self.add_module('pointwise',nn.Conv2d(in_channels = in_channels, out_channels = hidden_channels, kernel_size = 1, stride = 1, padding = 0, bias = False))
         self.add_module('pw_bn',nn.BatchNorm2d(hidden_channels))
@@ -83,7 +83,7 @@ class fibModule(nn.Module):
     def naive_block_channels_variation(self, blocks, in_channels = 5,  depth = 5, ratio = 0.618):
         channel_list =[in_channels]
         ratio_list = [ratio]
-        blocks = [i*2 for i in blocks]
+        # blocks = [i*2 for i in blocks]
 #        print(blocks)
         for block in blocks:
             depth_ = depth
@@ -128,11 +128,11 @@ class fibModule(nn.Module):
                 in_channels = blocks_channel_list[idx] + blocks_channel_list[idx-1]
                 out_channels = blocks_channel_list[idx+1]
 
-                #TODO:determine which is more effective
-                # if layer >2:
-                #     kernel_size = 1
-                # else:
-                kernel_size = 3
+                # TODO:determine which is more effective
+                if layer >2:
+                    kernel_size = 1
+                else:
+                    kernel_size = 3
 
                 #Conv2d to match the shape for concatenation
                 if(use_conv_cat):
@@ -142,7 +142,7 @@ class fibModule(nn.Module):
                                             name = 'block_'+str(block)+'_layer_'+str(layer)+'_cat_'))
                 #use Maxpooling
                 else:
-                    encoder.append(nn.MaxPool2d((3,3),1))
+                    encoder.append(nn.MaxPool2d(kernel_size,1))
 
                 encoder.append(ConvLayer(in_channels = in_channels,
                                         out_channels = out_channels,
@@ -165,14 +165,13 @@ class fibModule(nn.Module):
     def forward(self, inputs):
         x = inputs 
         for block in range(self.num_blocks):
-
+            
             #fdrc
             cat_out = self.encoder[block*self.block_depth*2](x)
 
             #fconv
             out = self.encoder[block*self.block_depth*2+1](x)
             for layer in range(1,self.block_depth):
-                # print(out.shape, cat_out.shape)
                 #fcat
                 in2 = torch.cat((out,cat_out),1)
                 
@@ -234,19 +233,3 @@ class FibNet(nn.Module):
             elif isinstance(m, nn.Linear):
                 m.weight.data.normal_(0, 0.01)
                 m.bias.data.zero_()
-# from torchsummary import  summary
-# from ptflops import get_model_complexity_info
-# """Load Cuda """
-# use_cuda = torch.cuda.is_available()
-# device = torch.device("cuda:0" if use_cuda else "cpu")
-# torch.backends.cudnn.benchmark = True
-# """"""""""""""""""
-
-# f = FibNet(in_channels=3,out_channels=1000, num_blocks=5, block_depth=5, use_conv_cat=False)
-# f.to(device)
-# summary(f,(3,224,224))
-# macs, params = get_model_complexity_info(f, (3, 224, 224), as_strings=True,
-#                                         print_per_layer_stat=False, verbose=False)
-# print()
-# print('{:<30}  {:<8}'.format('Computational complexity: ', macs))
-# print('{:<30}  {:<8}'.format('Number of parameters: ', params))
