@@ -2,4 +2,8 @@ data/*
 logs/*
 weights/*
 checkpoints/*
-param.txt
+__pycache__
+.vscode
+*.pyc
+hparam.txt
+sumarryscript.py
