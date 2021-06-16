@@ -1,4 +1,5 @@
 import argparse
+from genericpath import exists
 from logging import Logger
 import os
 import random
@@ -41,6 +42,8 @@ parser.add_argument('--nb', '--n-blocks', default=8, type=int,
                     help='number of fibNet blocks', dest='n_blocks')
 parser.add_argument('--bd', '--block-depth', default=3, type=int, 
                     help='FibNet Block Depth', dest='block_depth' )
+parser.add_argument('--use_conv_cat', default=True, type=bool, dest= 'use_conv_cat',
+                    help= 'For FibNet to choose wether using conv_cat (True) or maxpooling2d (False)')
 parser.add_argument('--cl', '--num_class', default=100, type=int, 
                     help='Number of Class', dest='num_class' )
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
@@ -56,6 +59,8 @@ parser.add_argument('-b', '--batch-size', default=256, type=int,
                          'using Data Parallel or Distributed Data Parallel')
 parser.add_argument('--lr', '--learning-rate', default=0.1, type=float,
                     metavar='LR', help='initial learning rate', dest='lr')
+parser.add_argument('--lr_mode', default="step", type=str,
+                    help='Learning rate decay mode', choices=['cosine','step'],  dest='lr_mode')
 parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
                     help='momentum')
 parser.add_argument('--wd', '--weight-decay', default=1e-4, type=float,
@@ -87,11 +92,16 @@ parser.add_argument('--log_path', default = None, type = str, dest = "log_path",
 
 best_acc1 = 0
 train_steps = 0
+val_steps = 0 
 def main():
     args = parser.parse_args()
     
     if args.log_path is not None:
-        log = logger.Create(os.path.join(args.log_path,args.arch))
+        if(args.arch == "FibNet"):
+            log = logger.Create(os.path.join(args.log_path,args.arch+str(args.n_blocks)+'x'+str(args.block_depth)))
+        else:
+            log = logger.Create(os.path.join(args.log_path,args.arch))
+
     if args.seed is not None:
         random.seed(args.seed)
         torch.manual_seed(args.seed)
@@ -120,6 +130,7 @@ def init_weights(m):
 def main_worker(gpu, log, args):
     global best_acc1
     global train_steps
+    global val_steps
     args.gpu = gpu
 
     if args.gpu is not None:
@@ -141,7 +152,7 @@ def main_worker(gpu, log, args):
     print("=> creating model '{}'".format(args.arch))
     if args.arch == "FibNet":
         from models.FibNet import FibNet
-        model = FibNet(in_channels = 3, out_channels = args.num_class, num_blocks = args.n_blocks, block_depth = args.block_depth, pretrained=False)
+        model = FibNet(in_channels = 3, out_channels = args.num_class, num_blocks = args.n_blocks, block_depth = args.block_depth, pretrained=False, use_conv_cat=args.use_conv_cat)
     elif args.arch == "MobileNetv2":
         from models.MobileNetv2 import MobileNetv2
         model = MobileNetv2(args.num_class)      
@@ -172,6 +183,7 @@ def main_worker(gpu, log, args):
             args.start_epoch = checkpoint['epoch']
             best_acc1 = checkpoint['best_acc1']
             train_steps = checkpoint['train_steps']
+            val_steps = checkpoint['val_steps']
             if args.gpu is not None:
                 # best_acc1 may be from a checkpoint from a different GPU
                 best_acc1 = best_acc1.to(args.gpu)
@@ -231,7 +243,7 @@ def main_worker(gpu, log, args):
                                                 pin_memory=True)  
 
     if args.evaluate:
-        validate(val_loader, model, criterion, args)
+        validate(val_loader, model, criterion, val_steps, log, args)
         return   
     
     for epoch in range(args.start_epoch, args.epochs):
@@ -241,27 +253,33 @@ def main_worker(gpu, log, args):
         train_steps =train(train_loader, model, criterion, optimizer, epoch, train_steps, log, args)
 
         # evaluate on validation set
-        acc1 = validate(val_loader, model, criterion, args)
+        acc1, val_steps = validate(val_loader, model, criterion, val_steps, log, args)
 
         # remember best acc@1 and save checkpoint
         is_best = acc1 > best_acc1
         best_acc1 = max(acc1, best_acc1)
-                                            
+
+        #for file path
+        if(args.arch == "FibNet"):
+            model_name = args.arch+str(args.n_blocks)+'x'+str(args.block_depth)
+        else:
+            model_name = args.arch                                    
         save_checkpoint({
                 'epoch': epoch + 1,
                 'arch': args.arch,
                 'state_dict': model.state_dict(),
                 'best_acc1': best_acc1,
                 'optimizer' : optimizer.state_dict(),
-                'train_steps':train_steps
-            }, is_best, args.arch)
+                'train_steps': train_steps,
+                'val_steps': val_steps
+            }, is_best, model_name)
 
 def train(train_loader, model, criterion, optimizer, epoch, train_steps, log, args):
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
-    top1 = AverageMeter('Acc@1', ':6.2f')
-    top5 = AverageMeter('Acc@5', ':6.2f')
+    top1 = AverageMeter('Acc@1', ':6.4f')
+    top5 = AverageMeter('Acc@5', ':6.4f')
     progress = ProgressMeter(
         len(train_loader),
         [batch_time, data_time, losses, top1, top5],
@@ -292,9 +310,15 @@ def train(train_loader, model, criterion, optimizer, epoch, train_steps, log, ar
         top5.update(acc5[0], images.size(0))
         train_steps+=1
         if(args.log_path is not None):
-            log.top1(acc1[0],train_steps)
-            log.top5(acc5[0],train_steps)
-
+            #raw
+            log.train_top1(top1.val, train_steps)
+            log.train_top5(top5.val, train_steps)
+            log.train_loss(losses.val, train_steps)
+            #averages
+            log.train_top1_avg(top1.avg, train_steps)
+            log.train_top5_avg(top5.avg, train_steps)
+            log.train_mloss(losses.avg, train_steps)
+            
         # compute gradient and do SGD step
         optimizer.zero_grad()
         loss.backward()
@@ -309,7 +333,7 @@ def train(train_loader, model, criterion, optimizer, epoch, train_steps, log, ar
     return train_steps
 
 
-def validate(val_loader, model, criterion, args):
+def validate(val_loader, model, criterion, val_steps, log, args):
     batch_time = AverageMeter('Time', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
     top1 = AverageMeter('Acc@1', ':6.2f')
@@ -339,7 +363,18 @@ def validate(val_loader, model, criterion, args):
             losses.update(loss.item(), images.size(0))
             top1.update(acc1[0], images.size(0))
             top5.update(acc5[0], images.size(0))
+            
+            val_steps+=1
+            if(args.log_path is not None):
+                #raw
+                log.val_top1(top1.val,val_steps)
+                log.val_top5(top5.val,val_steps)
+                log.val_loss(losses.val, val_steps)
 
+                #averages
+                log.val_top1_avg(top1.avg,val_steps)
+                log.val_top5_avg(top5.avg,val_steps)
+                log.val_mloss(losses.avg, val_steps)
             # measure elapsed time
             batch_time.update(time.time() - end)
             end = time.time()
@@ -351,12 +386,20 @@ def validate(val_loader, model, criterion, args):
         print(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'
               .format(top1=top1, top5=top5))
 
-    return top1.avg
+    return top1.avg, val_steps
 
 
 def save_checkpoint(state, is_best, model_name, filename='checkpoint.pth.tar'):
-    checkpoint_fp =  os.path.join("checkpoints", os.path.join(model_name,filename))
-    weights_fp  = os.path.join("weights", os.path.join(model_name,filename))
+    checkpoint_fp = os.path.join("checkpoints", model_name)
+    weights_fp = os.path.join("weights", model_name)
+
+    if(os.path.exists(checkpoint_fp) == False):
+        os.mkdir(checkpoint_fp)
+    if(os.path.exists(weights_fp) == False):
+        os.mkdir(weights_fp)
+
+    checkpoint_fp =  os.path.join(checkpoint_fp,filename)
+    weights_fp  = os.path.join(weights_fp,filename)
     torch.save(state, checkpoint_fp)
     if is_best:
         shutil.copyfile(checkpoint_fp, weights_fp)
@@ -404,10 +447,16 @@ class ProgressMeter(object):
 
 
 def adjust_learning_rate(optimizer, epoch, args):
-    """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
-    lr = args.lr * (0.1 ** (epoch // 30))
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
+    if(args.lr_mode == 'cosine'):
+        #Cosine learning rate decay
+        lr = 0.5 * args.lr  * (1 + np.cos(np.pi * (epoch)/ args.epochs ))
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = lr
+    else:
+        """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
+        lr = args.lr * (0.1 ** (epoch // 10))
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = lr
 
 
 def accuracy(output, target, topk=(1,)):
