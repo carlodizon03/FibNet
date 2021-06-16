@@ -208,15 +208,15 @@ class FibNet(nn.Module):
         self.use_conv_cat = use_conv_cat
         self.drop = nn.Dropout(0.05)
         self.conv1 = ConvLayer(3,16,3,2)
-        self.conv2 = ConvLayer(16,32,3,2)
-        self.encoder = fibModule(in_channels = 32, out_channels = self.out_channels ,num_blocks = self.num_blocks, block_depth = self.block_depth, use_conv_cat = self.use_conv_cat)
+        # self.conv2 = ConvLayer(16,32,3,2)
+        self.encoder = fibModule(in_channels = 16, out_channels = self.out_channels ,num_blocks = self.num_blocks, block_depth = self.block_depth, use_conv_cat = self.use_conv_cat)
         self._initialize_weights()
 
     def forward(self, inputs):
         inputs = self.conv1(inputs)
         inputs = self.drop(inputs)
-        inputs = self.conv2(inputs)
-        inputs = self.drop(inputs)
+        # inputs = self.conv2(inputs)
+        # inputs = self.drop(inputs)
         outputs = self.encoder(inputs)
         return outputs
 
@@ -233,3 +233,18 @@ class FibNet(nn.Module):
             elif isinstance(m, nn.Linear):
                 m.weight.data.normal_(0, 0.01)
                 m.bias.data.zero_()
+# """Load Cuda """
+# use_cuda = torch.cuda.is_available()
+# device = torch.device("cuda:0" if use_cuda else "cpu")
+# torch.backends.cudnn.benchmark = True
+
+# from torchsummary import summary
+# from ptflops import get_model_complexity_info
+
+# model = FibNet(3,100,5,5,False,True)
+# model.to(device)
+# summary(model, (3, 64, 64))
+# macs, params= get_model_complexity_info(model, (3, 64, 64), as_strings=True,
+#                                            print_per_layer_stat=False, verbose=False)
+# print('{:<30}  {:<8}'.format('Computational complexity: ', macs))
+# print('{:<30}  {:<8}'.format('Number of parameters: ', params))

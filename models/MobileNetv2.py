@@ -166,10 +166,10 @@ class MobileNetv2(nn.Module):
 # torch.backends.cudnn.benchmark = True
 # """"""""""""""""""
 
-# f = MobileNetv2(1000)
+# f = MobileNetv2(100)
 # f.to(device)
-# summary(f,(3,224,224))
-# macs, params = get_model_complexity_info(f, (3, 224, 224), as_strings=True,
+# summary(f,(3,64,64))
+# macs, params = get_model_complexity_info(f, (3, 64, 64), as_strings=True,
 #                                         print_per_layer_stat=False, verbose=False)
 # print()
 # print('{:<30}  {:<8}'.format('Computational complexity: ', macs))
