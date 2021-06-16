@@ -32,12 +32,20 @@ class Create(object):
         self.writer.add_scalar('Accuracy/training', value, step)
         self.writer.flush()
 
-    def top1(self, value, step):
-        self.writer.add_scalar('Accuracy/top1', value, step)
+    def train_top1_avg(self, value, step):
+        self.writer.add_scalar('top1_avg/training', value, step)
         self.writer.flush()
-    def top5(self, value, step):
-        self.writer.add_scalar('Accuracy/top5', value, step)
+    def train_top5_avg(self, value, step):
+        self.writer.add_scalar('top5_avg/training', value, step)
         self.writer.flush()
+
+    def train_top1(self, value, step):
+        self.writer.add_scalar('top1/training', value, step)
+        self.writer.flush()
+    def train_top5(self, value, step):
+        self.writer.add_scalar('top5/training', value, step)
+        self.writer.flush()
+
     def train_macc(self, value, step):
         self.writer.add_scalar('mAccuracy/training', value, step)
         self.writer.flush()
@@ -71,6 +79,22 @@ class Create(object):
         self.writer.add_scalar('Accuracy/validation', value, step)
         self.writer.flush()
     
+    def val_top1_avg(self, value, step):
+        self.writer.add_scalar('top1_avg/validation', value, step)
+        self.writer.flush()
+
+    def val_top5_avg(self, value, step):
+        self.writer.add_scalar('top5_avg/validation', value, step)
+        self.writer.flush()
+
+    def val_top1(self, value, step):
+        self.writer.add_scalar('top1/validation', value, step)
+        self.writer.flush()
+
+    def val_top5(self, value, step):
+        self.writer.add_scalar('top5/validation', value, step)
+        self.writer.flush()
+
     def val_macc(self, value, step):
         self.writer.add_scalar('mAccuracy/validation', value, step)
     
