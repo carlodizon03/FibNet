@@ -4,7 +4,8 @@ import random
 import shutil
 import time
 import warnings
-
+import yaml
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.parallel
@@ -16,16 +17,18 @@ import torch.utils.data
 import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-import torch.nn.init as init
-from FibNet import FibNet
+from models.FibNet import FibNet
 from logger import logger
-from torchsummary import  summary
-from ptflops import get_model_complexity_info
+from datetime import datetime
 model_names = "FibNet"
 log = logger.Create("logs/")
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
+
+parser.add_argument('-config', help="configuration file *.yml", type=str, required=False, default='configs\config.yml')
+parser.add_argument('-args', help="Manual inpug of arguments", type=bool, required=False, default=False)
+
 parser.add_argument('data', metavar='DIR',
-                    help='path to dataset')
+                    help='path to dataset', default='./ILSVRC/Data/CLS-LOC/')
 parser.add_argument('-a', '--arch', metavar='ARCH', default='FibNet',
                     choices=model_names,
                     help='model architecture: ' +
@@ -35,6 +38,7 @@ parser.add_argument('--nb', '--n-blocks', default=8, type=int,
                     help='number of fibNet blocks', dest='n_blocks')
 parser.add_argument('--bd', '--block-depth', default=3, type=int, 
                     help='FibNet Block Depth', dest='block_depth' )
+parser.add_argument('--cc', type = bool, default= True, help='use convolution contat', dest='use_conv_cat')
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
 parser.add_argument('--epochs', default=90, type=int, metavar='N',
@@ -85,6 +89,19 @@ train_steps = 0
 def main():
     args = parser.parse_args()
 
+    # get args from yaml config file
+    if not args.args:
+        opts = vars(args)
+        args = yaml.load(open(args.config), Loader=yaml.FullLoader)
+        opts.update(args)
+        args = opts
+    # get from manual argument input and save as a config file
+    else:
+        fname = str(args.arch)+str(args.n_blocks)+'x'+str(args.block_depth)+'.yml'
+        with open(os.path.join("configs", fname), 'w') as ymlConfig:
+            yaml.dump(args.__dict__, ymlConfig, default_flow_style=False)
+        print("=> new config file saved as", fname)
+
     if args.seed is not None:
         random.seed(args.seed)
         torch.manual_seed(args.seed)
@@ -96,8 +113,7 @@ def main():
                       'from checkpoints.')
 
     if args.gpu is not None:
-        warnings.warn('You have chosen a specific GPU. This will completely '
-                      'disable data parallelism.')
+        warnings.warn('You have chosen a specific GPU. This will completely disable data parallelism.')
 
     if args.dist_url == "env://" and args.world_size == -1:
         args.world_size = int(os.environ["WORLD_SIZE"])
@@ -116,16 +132,6 @@ def main():
         # Simply call main_worker function
         main_worker(args.gpu, ngpus_per_node, args)
 
-def initialize_parameters(m):
-    if isinstance(m, nn.Conv2d):
-        nn.init.xavier_uniform_(m.weight, gain = nn.init.calculate_gain('relu'))
-        if m.bias is not None:
-            torch.nn.init.zeros_(m.bias)
-    if isinstance(m,nn.BatchNorm2d):
-        torch.nn.init.ones_(m.weight)
-    elif isinstance(m, nn.Linear):
-        nn.init.xavier_uniform_(m.weight, gain = nn.init.calculate_gain('relu'))
-        torch.nn.init.zeros_(m.bias)  
 def main_worker(gpu, ngpus_per_node, args):
     global best_acc1
     global train_steps
@@ -146,10 +152,10 @@ def main_worker(gpu, ngpus_per_node, args):
     # create model
     if args.pretrained:
         print("=> using pre-trained model '{}'".format(args.arch))
-        model = FibNet(in_channels = 3, out_channels = 1000, num_blocks = args.n_blocks, block_depth = args.block_depth,pretrained=True)
+        model = FibNet(in_channels = 3, out_channels = 1000, num_blocks = args.n_blocks, block_depth = args.block_depth,pretrained=True, use_conv_cat=args.use_conv_cat)
     else:
         print("=> creating model '{}'".format(args.arch))
-        model =  FibNet(in_channels = 3, out_channels = 1000, num_blocks = args.n_blocks, block_depth = args.block_depth,pretrained=False)
+        model =  FibNet(in_channels = 3, out_channels = 1000, num_blocks = args.n_blocks, block_depth = args.block_depth,pretrained=False, use_conv_cat=args.use_conv_cat)
 
     if not torch.cuda.is_available():
         print('using CPU, this will be slow')
@@ -211,15 +217,12 @@ def main_worker(gpu, ngpus_per_node, args):
                   .format(args.resume, checkpoint['epoch']))
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
-    elif not args.pretrained:
-        print("=> initializing weights..")
-        model.apply(initialize_parameters)
     cudnn.benchmark = True
-    macs, params = get_model_complexity_info(model, (3, 224, 224), as_strings=True,
-                                        print_per_layer_stat=False, verbose=False)
-    print()
-    print('{:<30}  {:<8}'.format('Computational complexity: ', macs))
-    print('{:<30}  {:<8}'.format('Number of parameters: ', params))
+    # macs, params = get_model_complexity_info(model, (3, 224, 224), as_strings=True,
+    #                                     print_per_layer_stat=False, verbose=False)
+    # print()
+    # print('{:<30}  {:<8}'.format('Computational complexity: ', macs))
+    # print('{:<30}  {:<8}'.format('Number of parameters: ', params))
     # Data loading code
     traindir = os.path.join(args.data, 'train')
     valdir = os.path.join(args.data, 'val')
@@ -257,7 +260,8 @@ def main_worker(gpu, ngpus_per_node, args):
     if args.evaluate:
         validate(val_loader, model, criterion, args)
         return
-
+    start_time = datetime.now()
+    args.start_time = start_time
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             train_sampler.set_epoch(epoch)
@@ -321,7 +325,7 @@ def train(train_loader, model, criterion, optimizer, epoch, train_steps, args):
         train_steps+=1
         log.top1(acc1[0],train_steps)
         log.top5(acc5[0],train_steps)
-
+        log.train_loss(loss.item(),train_steps)
         # compute gradient and do SGD step
         optimizer.zero_grad()
         loss.backward()
@@ -332,7 +336,7 @@ def train(train_loader, model, criterion, optimizer, epoch, train_steps, args):
         end = time.time()
 
         if i % args.print_freq == 0:
-            progress.display(i)
+            progress.display(i, args)
     return train_steps
 
 def validate(val_loader, model, criterion, args):
@@ -365,13 +369,13 @@ def validate(val_loader, model, criterion, args):
             losses.update(loss.item(), images.size(0))
             top1.update(acc1[0], images.size(0))
             top5.update(acc5[0], images.size(0))
-
+            
             # measure elapsed time
             batch_time.update(time.time() - end)
             end = time.time()
 
             if i % args.print_freq == 0:
-                progress.display(i)
+                progress.display(i, args)
 
         # TODO: this should also be done with the ProgressMeter
         print(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'
@@ -380,10 +384,12 @@ def validate(val_loader, model, criterion, args):
     return top1.avg
 
 
-def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
-    torch.save(state, filename)
+def save_checkpoint(state, is_best, args, filename='checkpoint.pth.tar'):
+    model_fn = str(args.arch)+str(args.n_blocks)+'x'+str(args.block_depth)
+    model_fp = os.path.join('checkpoints', model_fn+'_'+filename)
+    torch.save(state, model_fp)
     if is_best:
-        shutil.copyfile(filename, 'model_best.pth.tar')
+        shutil.copyfile(filename, os.path.join('weights',model_fn+'_'+'model_best.pth.tar'))
 
 
 class AverageMeter(object):
@@ -416,10 +422,11 @@ class ProgressMeter(object):
         self.meters = meters
         self.prefix = prefix
 
-    def display(self, batch):
+    def display(self, batch, args):
         entries = [self.prefix + self.batch_fmtstr.format(batch)]
         entries += [str(meter) for meter in self.meters]
-        print('\t'.join(entries))
+        elapsed_time = datetime.now() - args.start_time
+        print('\t'.join(entries) + '\tElapsed Time: ' +str(elapsed_time))
 
     def _get_batch_fmtstr(self, num_batches):
         num_digits = len(str(num_batches // 1))
@@ -429,7 +436,8 @@ class ProgressMeter(object):
 
 def adjust_learning_rate(optimizer, epoch, args):
     """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
-    lr = args.lr * (0.1 ** (epoch // 30))
+    #Cosine learning rate decay
+    lr = 0.5 * args.lr  * (1 + np.cos(np.pi * (epoch)/ args.epochs ))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
