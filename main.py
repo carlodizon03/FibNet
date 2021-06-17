@@ -85,7 +85,7 @@ parser.add_argument('--multiprocessing-distributed', action='store_true',
 
 best_acc1 = 0
 train_steps = 0
-
+val_steps =0
 def main():
     args = parser.parse_args()
 
@@ -135,6 +135,7 @@ def main():
 def main_worker(gpu, ngpus_per_node, args):
     global best_acc1
     global train_steps
+    global val_steps
     args.gpu = gpu
 
     if args.gpu is not None:
@@ -208,6 +209,7 @@ def main_worker(gpu, ngpus_per_node, args):
             args.start_epoch = checkpoint['epoch']
             best_acc1 = checkpoint['best_acc1']
             train_steps = checkpoint['train_steps']
+            val_steps = checkpoint['val_steps']
             if args.gpu is not None:
                 # best_acc1 may be from a checkpoint from a different GPU
                 best_acc1 = best_acc1.to(args.gpu)
@@ -271,7 +273,7 @@ def main_worker(gpu, ngpus_per_node, args):
         train_steps =train(train_loader, model, criterion, optimizer, epoch, train_steps, args)
 
         # evaluate on validation set
-        acc1 = validate(val_loader, model, criterion, args)
+        acc1, val_steps = validate(val_loader, model, criterion, val_steps, args)
 
         # remember best acc@1 and save checkpoint
         is_best = acc1 > best_acc1
@@ -285,15 +287,16 @@ def main_worker(gpu, ngpus_per_node, args):
                 'state_dict': model.state_dict(),
                 'best_acc1': best_acc1,
                 'optimizer' : optimizer.state_dict(),
-                'train_steps':train_steps
+                'train_steps':train_steps,
+                'val_steps': val_steps
             }, is_best)
 
 def train(train_loader, model, criterion, optimizer, epoch, train_steps, args):
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
-    losses = AverageMeter('Loss', ':.4e')
-    top1 = AverageMeter('Acc@1', ':6.4f')
-    top5 = AverageMeter('Acc@5', ':6.4f')
+    losses = AverageMeter('Loss', ':.3e')
+    top1 = AverageMeter('Acc@1', ':6.3f')
+    top5 = AverageMeter('Acc@5', ':6.3f')
     progress = ProgressMeter(
         len(train_loader),
         [batch_time, data_time, losses, top1, top5],
@@ -323,9 +326,13 @@ def train(train_loader, model, criterion, optimizer, epoch, train_steps, args):
         top1.update(acc1[0], images.size(0))
         top5.update(acc5[0], images.size(0))
         train_steps+=1
-        log.top1(acc1[0],train_steps)
-        log.top5(acc5[0],train_steps)
-        log.train_loss(loss.item(),train_steps)
+        log.train_top1(top1.val,train_steps)
+        log.train_top5(top5.val,train_steps)
+        log.train_top1_avg(top1.avg,train_steps)
+        log.train_top5_avg(top5.avg,train_steps)
+        log.train_loss(losses.val,train_steps)
+        log.train_mloss(losses.avg,train_steps)
+
         # compute gradient and do SGD step
         optimizer.zero_grad()
         loss.backward()
@@ -339,11 +346,11 @@ def train(train_loader, model, criterion, optimizer, epoch, train_steps, args):
             progress.display(i, args)
     return train_steps
 
-def validate(val_loader, model, criterion, args):
+def validate(val_loader, model, criterion, val_steps, args):
     batch_time = AverageMeter('Time', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
-    top1 = AverageMeter('Acc@1', ':6.2f')
-    top5 = AverageMeter('Acc@5', ':6.2f')
+    top1 = AverageMeter('Acc@1', ':6.3f')
+    top5 = AverageMeter('Acc@5', ':6.3f')
     progress = ProgressMeter(
         len(val_loader),
         [batch_time, losses, top1, top5],
@@ -369,7 +376,13 @@ def validate(val_loader, model, criterion, args):
             losses.update(loss.item(), images.size(0))
             top1.update(acc1[0], images.size(0))
             top5.update(acc5[0], images.size(0))
-            
+            val_steps+=1
+            log.val_top1(top1.val,val_steps)
+            log.val_top5(top5.val,val_steps)
+            log.val_top1_avg(top1.avg,val_steps)
+            log.val_top5_avg(top5.avg,val_steps)
+            log.val_loss(losses.val,val_steps)
+            log.val_mloss(losses.avg,val_steps)
             # measure elapsed time
             batch_time.update(time.time() - end)
             end = time.time()
@@ -381,7 +394,7 @@ def validate(val_loader, model, criterion, args):
         print(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'
               .format(top1=top1, top5=top5))
 
-    return top1.avg
+    return top1.avg, val_steps
 
 
 def save_checkpoint(state, is_best, args, filename='checkpoint.pth.tar'):
