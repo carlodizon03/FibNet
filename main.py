@@ -17,8 +17,10 @@ import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import torch.nn.init as init
-from FibNet import FibNet, init_weights
+from FibNet import FibNet
 from logger import logger
+from torchsummary import  summary
+from ptflops import get_model_complexity_info
 model_names = "FibNet"
 log = logger.Create("logs/")
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
@@ -114,14 +116,16 @@ def main():
         # Simply call main_worker function
         main_worker(args.gpu, ngpus_per_node, args)
 
-def init_weights(m):
-    if type(m) == nn.Conv2d:
-        torch.nn.init.xavier_uniform(m.weight)
+def initialize_parameters(m):
+    if isinstance(m, nn.Conv2d):
+        nn.init.xavier_uniform_(m.weight, gain = nn.init.calculate_gain('relu'))
         if m.bias is not None:
             torch.nn.init.zeros_(m.bias)
-    if type(m) == nn.BatchNorm2d:
+    if isinstance(m,nn.BatchNorm2d):
         torch.nn.init.ones_(m.weight)
-
+    elif isinstance(m, nn.Linear):
+        nn.init.xavier_uniform_(m.weight, gain = nn.init.calculate_gain('relu'))
+        torch.nn.init.zeros_(m.bias)  
 def main_worker(gpu, ngpus_per_node, args):
     global best_acc1
     global train_steps
@@ -208,9 +212,14 @@ def main_worker(gpu, ngpus_per_node, args):
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
     elif not args.pretrained:
-        model.apply(init_weights)
+        print("=> initializing weights..")
+        model.apply(initialize_parameters)
     cudnn.benchmark = True
-
+    macs, params = get_model_complexity_info(model, (3, 224, 224), as_strings=True,
+                                        print_per_layer_stat=False, verbose=False)
+    print()
+    print('{:<30}  {:<8}'.format('Computational complexity: ', macs))
+    print('{:<30}  {:<8}'.format('Number of parameters: ', params))
     # Data loading code
     traindir = os.path.join(args.data, 'train')
     valdir = os.path.join(args.data, 'val')
@@ -279,8 +288,8 @@ def train(train_loader, model, criterion, optimizer, epoch, train_steps, args):
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
-    top1 = AverageMeter('Acc@1', ':6.2f')
-    top5 = AverageMeter('Acc@5', ':6.2f')
+    top1 = AverageMeter('Acc@1', ':6.4f')
+    top5 = AverageMeter('Acc@5', ':6.4f')
     progress = ProgressMeter(
         len(train_loader),
         [batch_time, data_time, losses, top1, top5],
