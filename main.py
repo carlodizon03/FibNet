@@ -1,3 +1,4 @@
+from abc import abstractmethod
 import argparse
 import os
 import random
@@ -289,7 +290,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 'optimizer' : optimizer.state_dict(),
                 'train_steps':train_steps,
                 'val_steps': val_steps
-            }, is_best)
+            }, is_best,args=args) 
 
 def train(train_loader, model, criterion, optimizer, epoch, train_steps, args):
     batch_time = AverageMeter('Time', ':6.3f')
@@ -402,7 +403,7 @@ def save_checkpoint(state, is_best, args, filename='checkpoint.pth.tar'):
     model_fp = os.path.join('checkpoints', model_fn+'_'+filename)
     torch.save(state, model_fp)
     if is_best:
-        shutil.copyfile(filename, os.path.join('weights',model_fn+'_'+'model_best.pth.tar'))
+        shutil.copyfile(model_fp, os.path.join('weights',model_fn+'_'+'model_best.pth.tar'))
 
 
 class AverageMeter(object):
