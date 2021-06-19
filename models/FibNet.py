@@ -1,11 +1,11 @@
 import torch
 import torch.nn as nn
 import math
-
+import matplotlib.pyplot as plt
 class ConvLayer(nn.Sequential):
-    def __init__(self, in_channels, out_channels, kernel_size = 3, stride = 1, name = ''):
+    def __init__(self, in_channels, out_channels, kernel_size = 3, stride = 1, padding = 0,  name = ''):
         super().__init__()
-        self.add_module(name+'conv2d',nn.Conv2d(in_channels,out_channels,kernel_size,stride, bias = False))
+        self.add_module(name+'conv2d',nn.Conv2d(in_channels,out_channels,kernel_size,stride,padding, bias = False))
         self.add_module('bn', nn.BatchNorm2d(out_channels))
         self.add_module('relu', nn.ReLU6(inplace = True) )
     def forward(self, input):
@@ -56,8 +56,7 @@ class fibModule(nn.Module):
         self.num_blocks = num_blocks
         self.block_depth = block_depth
         self.use_conv_cat = use_conv_cat
-        self.dropOut1 = nn.Dropout(0.1)
-        self.dropOut2 = nn.Dropout(0.2)
+        self.dropOut1 = nn.Dropout(0.01)
         self.encoder,self.transition, self.classifier = self.build(in_channels = self.in_channels, num_blocks = self.num_blocks, block_depth = self.block_depth, use_conv_cat = self.use_conv_cat)
 
     def fibonacci(self,depth):
@@ -95,7 +94,8 @@ class fibModule(nn.Module):
                 #1.2-3.26gmac
                 depth_ -= 1
                 ratio_list.append(ratio_)
-        
+        # plt.plot(channel_list)
+        # plt.show()
         return channel_list   
 
     
@@ -114,47 +114,44 @@ class fibModule(nn.Module):
             if(use_conv_cat):
                 encoder.append(ConvLayer(in_channels, 
                                         in_channels,
+                                        padding = 1,
                                         name = 'block_'+str(block)+'_layer_0_cat_'))
             #use Maxpooling
             else:
-                encoder.append(nn.MaxPool2d((3,3),1))
+                encoder.append(nn.MaxPool2d(3,stride=1,padding = 1))
 
             #start of block conv
             encoder.append(ConvLayer(in_channels,
                                     out_channels, 
+                                    padding = 1,
                                     name = 'block_'+str(block)+'_layer_0_'))
             for layer in range(1,block_depth):
                 idx =  block*block_depth+layer
                 in_channels = blocks_channel_list[idx] + blocks_channel_list[idx-1]
                 out_channels = blocks_channel_list[idx+1]
 
-                # TODO:determine which is more effective
-                if layer >2:
-                    kernel_size = 1
-                else:
-                    kernel_size = 3
-
                 #Conv2d to match the shape for concatenation
                 if(use_conv_cat):
                     encoder.append(ConvLayer(in_channels = blocks_channel_list[idx],
                                             out_channels = blocks_channel_list[idx],
-                                            kernel_size= kernel_size,
+                                            padding = 1,
                                             name = 'block_'+str(block)+'_layer_'+str(layer)+'_cat_'))
                 #use Maxpooling
                 else:
-                    encoder.append(nn.MaxPool2d(kernel_size,1))
+                    encoder.append(nn.MaxPool2d(3,stride=1,padding = 1))
 
                 encoder.append(ConvLayer(in_channels = in_channels,
                                         out_channels = out_channels,
-                                        kernel_size=kernel_size,
+                                        padding = 1,
                                         name = 'block_'+str(block)+'_layer_'+str(layer)+'_'))
                 #transition
                 if layer == block_depth-1:
                      transition.append(ConvLayer(in_channels = blocks_channel_list[idx] + out_channels,
-                                             out_channels = blocks_channel_list[(block+1)*block_depth],
-                                             kernel_size = 1,
-                                             stride = 1,
-                                             name = 'block_'+str(block)+'_layer_'+str(layer)+'_transition_'))
+                                            out_channels = blocks_channel_list[(block+1)*block_depth],
+                                            kernel_size = 3,
+                                            stride = 2,
+                                            padding = 1,
+                                            name = 'block_'+str(block)+'_layer_'+str(layer)+'_transition_'))
                 #break for the last index
                 if idx +1 == block_depth * num_blocks:
                     cls.append(classifier(in_channels = blocks_channel_list[(block+1)*block_depth], out_channels = self.out_channels))
@@ -207,16 +204,13 @@ class FibNet(nn.Module):
         self.block_depth = block_depth
         self.use_conv_cat = use_conv_cat
         self.drop = nn.Dropout(0.05)
-        self.conv1 = ConvLayer(3,16,3,2)
-        # self.conv2 = ConvLayer(16,32,3,2)
-        self.encoder = fibModule(in_channels = 16, out_channels = self.out_channels ,num_blocks = self.num_blocks, block_depth = self.block_depth, use_conv_cat = self.use_conv_cat)
+        self.conv1 = ConvLayer(3,32,3,2, padding =1)
+        self.encoder = fibModule(in_channels = 32, out_channels = self.out_channels ,num_blocks = self.num_blocks, block_depth = self.block_depth, use_conv_cat = self.use_conv_cat)
         self._initialize_weights()
 
     def forward(self, inputs):
         inputs = self.conv1(inputs)
         inputs = self.drop(inputs)
-        # inputs = self.conv2(inputs)
-        # inputs = self.drop(inputs)
         outputs = self.encoder(inputs)
         return outputs
 
@@ -241,7 +235,7 @@ class FibNet(nn.Module):
 # from torchsummary import summary
 # from ptflops import get_model_complexity_info
 
-# model = FibNet(3,100,5,5,False,True)
+# model = FibNet(3,100,5,3,False,True)
 # model.to(device)
 # summary(model, (3, 64, 64))
 # macs, params= get_model_complexity_info(model, (3, 64, 64), as_strings=True,
