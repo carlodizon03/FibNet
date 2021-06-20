@@ -7,3 +7,5 @@ __pycache__
 *.pyc
 hparam.txt
 sumarryscript.py
+models\__pycache__\*
+*.cpython-38.pyc
