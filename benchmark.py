@@ -1,4 +1,3 @@
-from abc import abstractmethod
 import argparse
 from genericpath import exists
 from logging import Logger
@@ -25,7 +24,7 @@ import numpy as np
 from logger import logger
 from ptflops import get_model_complexity_info
 
-model_names = ["FibNet"]
+model_names = ["FibNet", "MobileNetv2", "HaRD-Net", "DenseNet", "ResNet"]
 dataset_choices = ["imagenet", "cifar100"]
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
@@ -82,6 +81,14 @@ parser.add_argument('--gpu', default=None, type=int,
                     help='GPU id to use.')
 parser.add_argument('--log_path', default = None, type = str, dest = "log_path",
                         help='Sets the tensorboard logging.')
+
+
+
+
+
+
+
+
 
 
 best_acc1 = 0
@@ -147,6 +154,9 @@ def main_worker(gpu, log, args):
     if args.arch == "FibNet":
         from models.FibNet import FibNet
         model = FibNet(in_channels = 3, out_channels = args.num_class, num_blocks = args.n_blocks, block_depth = args.block_depth, pretrained=False, use_conv_cat=args.use_conv_cat)
+    elif args.arch == "MobileNetv2":
+        from models.MobileNetv2 import MobileNetv2
+        model = MobileNetv2(args.num_class)      
 
     if not torch.cuda.is_available():
         print('using CPU, this will be slow')
@@ -263,9 +273,6 @@ def main_worker(gpu, log, args):
                 'optimizer' : optimizer.state_dict(),
                 'train_steps': train_steps,
                 'val_steps': val_steps
-<<<<<<< HEAD
-            }, is_best,args=args) 
-=======
             }, is_best, model_name)
 
     if args.dataset_name == 'cifar100':
@@ -276,7 +283,6 @@ def main_worker(gpu, log, args):
     macs, params= get_model_complexity_info(model, image_shape, as_strings=False,
                                            print_per_layer_stat=False, verbose=False)
     log.h_params(args.__dict__,{'Top_1':acc1, 'Top_5':acc2, 'GMacs': float(macs[:-4]), 'Params': float(params[:-2])},"training_config")
->>>>>>> 4824be269cf3829743d631823a25643ea326b3f9
 
 def train(train_loader, model, criterion, optimizer, epoch, train_steps, log, args):
     batch_time = AverageMeter('Time', ':6.3f')
@@ -406,11 +412,7 @@ def save_checkpoint(state, is_best, model_name, filename='checkpoint.pth.tar'):
     weights_fp  = os.path.join(weights_fp,filename)
     torch.save(state, checkpoint_fp)
     if is_best:
-<<<<<<< HEAD
-        shutil.copyfile(model_fp, os.path.join('weights',model_fn+'_'+'model_best.pth.tar'))
-=======
         shutil.copyfile(checkpoint_fp, weights_fp)
->>>>>>> 4824be269cf3829743d631823a25643ea326b3f9
 
 
 class AverageMeter(object):

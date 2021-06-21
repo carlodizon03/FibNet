@@ -1,6 +1,10 @@
 arch: FibNet
 args: true
+<<<<<<< HEAD
 batch_size: 128
+=======
+batch_size: 64
+>>>>>>> 4824be269cf3829743d631823a25643ea326b3f9
 block_depth: 5
 config: configs\config.yml
 data: /media/spacelab/DatasetDisk/ILSVRC/Data/CLS-LOC/
