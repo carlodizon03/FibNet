@@ -45,9 +45,9 @@ parser.add_argument('--nb', '--n-blocks', default=0, type=int,
                     help='number of fibNet blocks', dest='n_blocks')
 parser.add_argument('--bd', '--block-depth', default=0, type=int, 
                     help='FibNet Block Depth', dest='block_depth' )
-parser.add_argument('-r1', default=0.618, type=float, 
+parser.add_argument('--r1', default=0.618, type=float, 
                     help='First ratio for FibNet')
-parser.add_argument('-r2', default=3.414, type=float, 
+parser.add_argument('--r2', default=3.414, type=float, 
                     help='First ratio for FibNet')
 parser.add_argument('--use_conv_cat', default=True, type=bool, dest= 'use_conv_cat',
                     help= 'For FibNet to choose wether using conv_cat (True) or maxpooling2d (False)')
