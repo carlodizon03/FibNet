@@ -4,7 +4,7 @@ weights/*
 data/*
 models\__pycache__\*
 hparams.txt
-run.
+run.bat
 run.sh
 sumarryscript.py
 
