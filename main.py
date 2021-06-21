@@ -276,7 +276,7 @@ def main_worker(gpu, log, args):
     elif args.dataset_name == 'imagenet':
         image_shape = (3,224,224)
 
-    macs, params= get_model_complexity_info(model, image_shape, as_strings=False,
+    macs, params= get_model_complexity_info(model, image_shape, as_strings=True,
                                            print_per_layer_stat=False, verbose=False)
     log.h_params(args.__dict__,{'Top_1':acc1, 'Top_5':acc2, 'GMacs': float(macs[:-4]), 'Params': float(params[:-2])},"training_config")
 
