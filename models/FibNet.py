@@ -18,10 +18,10 @@ class dws(nn.Sequential):
         super().__init__()
         self.add_module('pointwise',nn.Conv2d(in_channels, out_channels , kernel_size = 1))
         self.add_module('bn2', nn.BatchNorm2d(out_channels))
-        self.add_module('relu2', nn.ReLU(inplace = True))
+        self.add_module('relu2', nn.ReLU6(inplace = True))
         self.add_module('depthwise',nn.Conv2d(out_channels, out_channels, kernel_size = 3, stride = 1, padding = 0, groups = out_channels, bias = False))
         self.add_module('bn1', nn.BatchNorm2d(out_channels))
-        self.add_module('relu1', nn.ReLU())
+        self.add_module('relu1', nn.ReLU6(inplace = True))
     def forward(self, input):
         return super().forward(input)
 
@@ -165,9 +165,13 @@ class fibModule(nn.Module):
             
             #fdrc
             cat_out = self.encoder[block*self.block_depth*2](x)
+            if(self.use_conv_cat): 
+                cat_out = self.dropOut1(cat_out)
 
             #fconv
             out = self.encoder[block*self.block_depth*2+1](x)
+            out = self.dropOut1(out)
+
             for layer in range(1,self.block_depth):
                 #fcat
                 in2 = torch.cat((out,cat_out),1)
@@ -177,9 +181,12 @@ class fibModule(nn.Module):
 
                 #fdrc
                 cat_out = self.encoder[block*self.block_depth*2+(layer*2)](x)
+                if(self.use_conv_cat): 
+                    cat_out = self.dropOut1(cat_out)
 
                 #fconv
                 out  = self.encoder[block*self.block_depth*2+(layer*2)+1](in2)
+                out = self.dropOut1(out)
 
                 #identity of ld-1
                 if layer == self.block_depth-1:
@@ -203,7 +210,7 @@ class FibNet(nn.Module):
         self.num_blocks  = num_blocks
         self.block_depth = block_depth
         self.use_conv_cat = use_conv_cat
-        self.drop = nn.Dropout(0.05)
+        self.drop = nn.Dropout(0.01)
         self.conv1 = ConvLayer(3,32,3,2, padding =1)
         self.encoder = fibModule(in_channels = 32, out_channels = self.out_channels ,num_blocks = self.num_blocks, block_depth = self.block_depth, use_conv_cat = self.use_conv_cat)
         self._initialize_weights()
@@ -227,18 +234,18 @@ class FibNet(nn.Module):
             elif isinstance(m, nn.Linear):
                 m.weight.data.normal_(0, 0.01)
                 m.bias.data.zero_()
-# """Load Cuda """
-# use_cuda = torch.cuda.is_available()
-# device = torch.device("cuda:0" if use_cuda else "cpu")
-# torch.backends.cudnn.benchmark = True
+"""Load Cuda """
+use_cuda = torch.cuda.is_available()
+device = torch.device("cuda:0" if use_cuda else "cpu")
+torch.backends.cudnn.benchmark = True
 
-# from torchsummary import summary
-# from ptflops import get_model_complexity_info
+from torchsummary import summary
+from ptflops import get_model_complexity_info
 
-# model = FibNet(3,100,5,3,False,True)
-# model.to(device)
-# summary(model, (3, 64, 64))
-# macs, params= get_model_complexity_info(model, (3, 64, 64), as_strings=True,
-#                                            print_per_layer_stat=False, verbose=False)
-# print('{:<30}  {:<8}'.format('Computational complexity: ', macs))
-# print('{:<30}  {:<8}'.format('Number of parameters: ', params))
+model = FibNet(3,100,5,3,False,True)
+model.to(device)
+summary(model, (3, 64, 64))
+macs, params= get_model_complexity_info(model, (3, 64, 64), as_strings=True,
+                                           print_per_layer_stat=False, verbose=False)
+print('{:<30}  {:<8}'.format('Computational complexity: ', macs))
+print('{:<30}  {:<8}'.format('Number of parameters: ', params))
