@@ -204,6 +204,10 @@ class Create(object):
         self.writer.flush()
         self.writer.close()
 
+    def h_params(self, h_param_dict, tops_dict, name):
+        self.writer.add_hparams(h_param_dict, metric_dict=tops_dict, name = name)
+        self.writer.flush()
+        self.writer.close()
     def close(self):
         self.writer.close()
 
