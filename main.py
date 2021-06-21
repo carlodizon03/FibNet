@@ -22,6 +22,7 @@ import torch.nn.init as init
 import matplotlib.pyplot as plt
 import numpy as np
 
+from datetime import datetime
 from logger import logger
 from ptflops import get_model_complexity_info
 
@@ -236,7 +237,8 @@ def main_worker(gpu, log, args):
     if args.evaluate:
         validate(val_loader, model, criterion, val_steps, log, args)
         return   
-    
+    start_time = datetime.now()
+    args.start_time = start_time
     for epoch in range(args.start_epoch, args.epochs):
         adjust_learning_rate(optimizer, epoch, args)
 
@@ -333,7 +335,7 @@ def train(train_loader, model, criterion, optimizer, epoch, train_steps, log, ar
         end = time.time()
 
         if i % args.print_freq == 0:
-            progress.display(i)
+            progress.display(i,args)
     return train_steps
 
 
@@ -384,7 +386,7 @@ def validate(val_loader, model, criterion, val_steps, log, args):
             end = time.time()
 
             if i % args.print_freq == 0:
-                progress.display(i)
+                progress.display(i,args)
 
         # TODO: this should also be done with the ProgressMeter
         print(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'
@@ -443,10 +445,11 @@ class ProgressMeter(object):
         self.meters = meters
         self.prefix = prefix
 
-    def display(self, batch):
+    def display(self, batch, args):
         entries = [self.prefix + self.batch_fmtstr.format(batch)]
         entries += [str(meter) for meter in self.meters]
-        print('\t'.join(entries))
+        elapsed_time = datetime.now() - args.start_time
+        print('\t'.join(entries) + '\tElapsed Time: ' +str(elapsed_time))
 
     def _get_batch_fmtstr(self, num_batches):
         num_digits = len(str(num_batches // 1))
