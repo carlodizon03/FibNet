@@ -35,7 +35,6 @@ class Create(object):
     def train_top1_avg(self, value, step):
         self.writer.add_scalar('top1_avg/training', value, step)
         self.writer.flush()
-        
     def train_top5_avg(self, value, step):
         self.writer.add_scalar('top5_avg/training', value, step)
         self.writer.flush()
@@ -205,6 +204,10 @@ class Create(object):
         self.writer.flush()
         self.writer.close()
 
+    def h_params(self, h_param_dict, tops_dict, name):
+        self.writer.add_hparams(h_param_dict, metric_dict=tops_dict, name = name)
+        self.writer.flush()
+        self.writer.close()
     def close(self):
         self.writer.close()
 
