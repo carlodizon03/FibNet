@@ -24,7 +24,7 @@ import numpy as np
 from logger import logger
 from ptflops import get_model_complexity_info
 
-model_names = ["FibNet"]
+model_names = ["FibNet", "MobileNetv2", "HaRD-Net", "DenseNet", "ResNet"]
 dataset_choices = ["imagenet", "cifar100"]
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
@@ -81,6 +81,14 @@ parser.add_argument('--gpu', default=None, type=int,
                     help='GPU id to use.')
 parser.add_argument('--log_path', default = None, type = str, dest = "log_path",
                         help='Sets the tensorboard logging.')
+
+
+
+
+
+
+
+
 
 
 best_acc1 = 0
@@ -146,6 +154,9 @@ def main_worker(gpu, log, args):
     if args.arch == "FibNet":
         from models.FibNet import FibNet
         model = FibNet(in_channels = 3, out_channels = args.num_class, num_blocks = args.n_blocks, block_depth = args.block_depth, pretrained=False, use_conv_cat=args.use_conv_cat)
+    elif args.arch == "MobileNetv2":
+        from models.MobileNetv2 import MobileNetv2
+        model = MobileNetv2(args.num_class)      
 
     if not torch.cuda.is_available():
         print('using CPU, this will be slow')
