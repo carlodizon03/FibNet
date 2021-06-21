@@ -234,18 +234,18 @@ class FibNet(nn.Module):
             elif isinstance(m, nn.Linear):
                 m.weight.data.normal_(0, 0.01)
                 m.bias.data.zero_()
-"""Load Cuda """
-use_cuda = torch.cuda.is_available()
-device = torch.device("cuda:0" if use_cuda else "cpu")
-torch.backends.cudnn.benchmark = True
+# """Load Cuda """
+# use_cuda = torch.cuda.is_available()
+# device = torch.device("cuda:0" if use_cuda else "cpu")
+# torch.backends.cudnn.benchmark = True
 
-from torchsummary import summary
-from ptflops import get_model_complexity_info
+# from torchsummary import summary
+# from ptflops import get_model_complexity_info
 
-model = FibNet(3,100,5,3,False,True)
-model.to(device)
-summary(model, (3, 64, 64))
-macs, params= get_model_complexity_info(model, (3, 64, 64), as_strings=True,
-                                           print_per_layer_stat=False, verbose=False)
-print('{:<30}  {:<8}'.format('Computational complexity: ', macs))
-print('{:<30}  {:<8}'.format('Number of parameters: ', params))
+# model = FibNet(3,100,5,3,False,True)
+# model.to(device)
+# summary(model, (3, 64, 64))
+# macs, params= get_model_complexity_info(model, (3, 64, 64), as_strings=True,
+#                                            print_per_layer_stat=False, verbose=False)
+# print('{:<30}  {:<8}'.format('Computational complexity: ', macs))
+# print('{:<30}  {:<8}'.format('Number of parameters: ', params))
