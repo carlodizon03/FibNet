@@ -90,6 +90,7 @@ class fibModule(nn.Module):
                 channel_list.append(val)
                 ratio_ = self.logistic(self.r2, ratio_)
                 depth_ -= 1
+        print(len(channel_list))
         return channel_list   
 
     
@@ -123,12 +124,6 @@ class fibModule(nn.Module):
                 idx =  block*block_depth+layer
                 in_channels = blocks_channel_list[idx] + blocks_channel_list[idx-1]
                 out_channels = blocks_channel_list[idx+1]
-
-                # TODO:determine which is more effective
-                if layer > 2:
-                    kernel_size = 1
-                else:
-                    kernel_size = 3
 
                 #Conv2d to match the shape for concatenation
                 if(use_conv_cat):
