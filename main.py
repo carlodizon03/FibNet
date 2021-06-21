@@ -265,9 +265,6 @@ def main_worker(gpu, log, args):
                 'optimizer' : optimizer.state_dict(),
                 'train_steps': train_steps,
                 'val_steps': val_steps
-<<<<<<< HEAD
-            }, is_best,args=args) 
-=======
             }, is_best, model_name)
 
     if args.dataset_name == 'cifar100':
@@ -278,7 +275,6 @@ def main_worker(gpu, log, args):
     macs, params= get_model_complexity_info(model, image_shape, as_strings=False,
                                            print_per_layer_stat=False, verbose=False)
     log.h_params(args.__dict__,{'Top_1':acc1, 'Top_5':acc2, 'GMacs': float(macs[:-4]), 'Params': float(params[:-2])},"training_config")
->>>>>>> 4824be269cf3829743d631823a25643ea326b3f9
 
 def train(train_loader, model, criterion, optimizer, epoch, train_steps, log, args):
     batch_time = AverageMeter('Time', ':6.3f')
