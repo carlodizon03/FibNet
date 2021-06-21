@@ -404,11 +404,7 @@ def save_checkpoint(state, is_best, model_name, filename='checkpoint.pth.tar'):
     weights_fp  = os.path.join(weights_fp,filename)
     torch.save(state, checkpoint_fp)
     if is_best:
-<<<<<<< HEAD
-        shutil.copyfile(model_fp, os.path.join('weights',model_fn+'_'+'model_best.pth.tar'))
-=======
         shutil.copyfile(checkpoint_fp, weights_fp)
->>>>>>> 4824be269cf3829743d631823a25643ea326b3f9
 
 
 class AverageMeter(object):
