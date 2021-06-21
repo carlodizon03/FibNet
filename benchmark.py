@@ -22,6 +22,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from logger import logger
+from ptflops import get_model_complexity_info
 
 model_names = ["FibNet", "MobileNetv2", "HaRD-Net", "DenseNet", "ResNet"]
 dataset_choices = ["imagenet", "cifar100"]
@@ -38,9 +39,9 @@ parser.add_argument('-a', '--arch', metavar='ARCH', default='FibNet',
 parser.add_argument('--ds', '--dataset_name', type = str, dest = 'dataset_name', default = 'Imagenet',
                     help = 'Name of dataset to be used.',
                     choices = dataset_choices)
-parser.add_argument('--nb', '--n-blocks', default=8, type=int, 
+parser.add_argument('--nb', '--n-blocks', default=0, type=int, 
                     help='number of fibNet blocks', dest='n_blocks')
-parser.add_argument('--bd', '--block-depth', default=3, type=int, 
+parser.add_argument('--bd', '--block-depth', default=0, type=int, 
                     help='FibNet Block Depth', dest='block_depth' )
 parser.add_argument('--use_conv_cat', default=True, type=bool, dest= 'use_conv_cat',
                     help= 'For FibNet to choose wether using conv_cat (True) or maxpooling2d (False)')
@@ -253,7 +254,7 @@ def main_worker(gpu, log, args):
         train_steps =train(train_loader, model, criterion, optimizer, epoch, train_steps, log, args)
 
         # evaluate on validation set
-        acc1, val_steps = validate(val_loader, model, criterion, val_steps, log, args)
+        acc1, acc2, val_steps = validate(val_loader, model, criterion, val_steps, log, args)
 
         # remember best acc@1 and save checkpoint
         is_best = acc1 > best_acc1
@@ -273,6 +274,15 @@ def main_worker(gpu, log, args):
                 'train_steps': train_steps,
                 'val_steps': val_steps
             }, is_best, model_name)
+
+    if args.dataset_name == 'cifar100':
+        image_shape = (3,64,64)
+    elif args.dataset_name == 'imagenet':
+        image_shape = (3,224,224)
+
+    macs, params= get_model_complexity_info(model, image_shape, as_strings=False,
+                                           print_per_layer_stat=False, verbose=False)
+    log.h_params(args.__dict__,{'Top_1':acc1, 'Top_5':acc2, 'GMacs': float(macs[:-4]), 'Params': float(params[:-2])},"training_config")
 
 def train(train_loader, model, criterion, optimizer, epoch, train_steps, log, args):
     batch_time = AverageMeter('Time', ':6.3f')
@@ -386,7 +396,7 @@ def validate(val_loader, model, criterion, val_steps, log, args):
         print(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'
               .format(top1=top1, top5=top5))
 
-    return top1.avg, val_steps
+    return top1.avg, top5.avg, val_steps
 
 
 def save_checkpoint(state, is_best, model_name, filename='checkpoint.pth.tar'):
