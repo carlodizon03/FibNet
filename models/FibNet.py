@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import math
-import matplotlib.pyplot as plt
 class ConvLayer(nn.Sequential):
     def __init__(self, in_channels, out_channels, kernel_size = 3, stride = 1, padding = 0,  name = ''):
         super().__init__()
@@ -21,7 +20,7 @@ class dws(nn.Sequential):
         self.add_module('relu2', nn.ReLU6(inplace = True))
         self.add_module('depthwise',nn.Conv2d(out_channels, out_channels, kernel_size = 3, stride = 1, padding = 0, groups = out_channels, bias = False))
         self.add_module('bn1', nn.BatchNorm2d(out_channels))
-        self.add_module('relu1', nn.ReLU6(inplace = True))
+        self.add_module('relu1', nn.ReLU6())
     def forward(self, input):
         return super().forward(input)
 
@@ -90,7 +89,7 @@ class fibModule(nn.Module):
             while depth_ > 0:
                 val = int( (block * ratio_ * (1 - ratio_))*100)
                 channel_list.append(val)
-                ratio_ = self.logistic(3.414, ratio_)
+                ratio_ = self.logistic(2.4, ratio_)
                 #1.2-3.26gmac
                 depth_ -= 1
                 ratio_list.append(ratio_)
@@ -129,6 +128,12 @@ class fibModule(nn.Module):
                 idx =  block*block_depth+layer
                 in_channels = blocks_channel_list[idx] + blocks_channel_list[idx-1]
                 out_channels = blocks_channel_list[idx+1]
+
+                # TODO:determine which is more effective
+                if layer > 2:
+                    kernel_size = 1
+                else:
+                    kernel_size = 3
 
                 #Conv2d to match the shape for concatenation
                 if(use_conv_cat):

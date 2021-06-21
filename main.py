@@ -19,6 +19,7 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 from models.FibNet import FibNet
 from logger import logger
+from datetime import datetime
 model_names = "FibNet"
 log = logger.Create("logs/")
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
@@ -84,7 +85,7 @@ parser.add_argument('--multiprocessing-distributed', action='store_true',
 
 best_acc1 = 0
 train_steps = 0
-
+val_steps =0
 def main():
     args = parser.parse_args()
 
@@ -112,8 +113,7 @@ def main():
                       'from checkpoints.')
 
     if args.gpu is not None:
-        warnings.warn('You have chosen a specific GPU. This will completely '
-                      'disable data parallelism.')
+        warnings.warn('You have chosen a specific GPU. This will completely disable data parallelism.')
 
     if args.dist_url == "env://" and args.world_size == -1:
         args.world_size = int(os.environ["WORLD_SIZE"])
@@ -135,6 +135,7 @@ def main():
 def main_worker(gpu, ngpus_per_node, args):
     global best_acc1
     global train_steps
+    global val_steps
     args.gpu = gpu
 
     if args.gpu is not None:
@@ -208,6 +209,7 @@ def main_worker(gpu, ngpus_per_node, args):
             args.start_epoch = checkpoint['epoch']
             best_acc1 = checkpoint['best_acc1']
             train_steps = checkpoint['train_steps']
+            val_steps = checkpoint['val_steps']
             if args.gpu is not None:
                 # best_acc1 may be from a checkpoint from a different GPU
                 best_acc1 = best_acc1.to(args.gpu)
@@ -218,7 +220,11 @@ def main_worker(gpu, ngpus_per_node, args):
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
     cudnn.benchmark = True
-
+    # macs, params = get_model_complexity_info(model, (3, 224, 224), as_strings=True,
+    #                                     print_per_layer_stat=False, verbose=False)
+    # print()
+    # print('{:<30}  {:<8}'.format('Computational complexity: ', macs))
+    # print('{:<30}  {:<8}'.format('Number of parameters: ', params))
     # Data loading code
     traindir = os.path.join(args.data, 'train')
     valdir = os.path.join(args.data, 'val')
@@ -256,7 +262,8 @@ def main_worker(gpu, ngpus_per_node, args):
     if args.evaluate:
         validate(val_loader, model, criterion, args)
         return
-
+    start_time = datetime.now()
+    args.start_time = start_time
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             train_sampler.set_epoch(epoch)
@@ -266,7 +273,7 @@ def main_worker(gpu, ngpus_per_node, args):
         train_steps =train(train_loader, model, criterion, optimizer, epoch, train_steps, args)
 
         # evaluate on validation set
-        acc1 = validate(val_loader, model, criterion, args)
+        acc1, val_steps = validate(val_loader, model, criterion, val_steps, args)
 
         # remember best acc@1 and save checkpoint
         is_best = acc1 > best_acc1
@@ -280,15 +287,16 @@ def main_worker(gpu, ngpus_per_node, args):
                 'state_dict': model.state_dict(),
                 'best_acc1': best_acc1,
                 'optimizer' : optimizer.state_dict(),
-                'train_steps':train_steps
+                'train_steps':train_steps,
+                'val_steps': val_steps
             }, is_best)
 
 def train(train_loader, model, criterion, optimizer, epoch, train_steps, args):
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
-    losses = AverageMeter('Loss', ':.4e')
-    top1 = AverageMeter('Acc@1', ':6.2f')
-    top5 = AverageMeter('Acc@5', ':6.2f')
+    losses = AverageMeter('Loss', ':.3e')
+    top1 = AverageMeter('Acc@1', ':6.3f')
+    top5 = AverageMeter('Acc@5', ':6.3f')
     progress = ProgressMeter(
         len(train_loader),
         [batch_time, data_time, losses, top1, top5],
@@ -318,9 +326,13 @@ def train(train_loader, model, criterion, optimizer, epoch, train_steps, args):
         top1.update(acc1[0], images.size(0))
         top5.update(acc5[0], images.size(0))
         train_steps+=1
-        log.top1(acc1[0],train_steps)
-        log.top5(acc5[0],train_steps)
-        log.train_loss(loss.item(),train_steps)
+        log.train_top1(top1.val,train_steps)
+        log.train_top5(top5.val,train_steps)
+        log.train_top1_avg(top1.avg,train_steps)
+        log.train_top5_avg(top5.avg,train_steps)
+        log.train_loss(losses.val,train_steps)
+        log.train_mloss(losses.avg,train_steps)
+
         # compute gradient and do SGD step
         optimizer.zero_grad()
         loss.backward()
@@ -331,14 +343,14 @@ def train(train_loader, model, criterion, optimizer, epoch, train_steps, args):
         end = time.time()
 
         if i % args.print_freq == 0:
-            progress.display(i)
+            progress.display(i, args)
     return train_steps
 
-def validate(val_loader, model, criterion, args):
+def validate(val_loader, model, criterion, val_steps, args):
     batch_time = AverageMeter('Time', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
-    top1 = AverageMeter('Acc@1', ':6.2f')
-    top5 = AverageMeter('Acc@5', ':6.2f')
+    top1 = AverageMeter('Acc@1', ':6.3f')
+    top5 = AverageMeter('Acc@5', ':6.3f')
     progress = ProgressMeter(
         len(val_loader),
         [batch_time, losses, top1, top5],
@@ -364,19 +376,25 @@ def validate(val_loader, model, criterion, args):
             losses.update(loss.item(), images.size(0))
             top1.update(acc1[0], images.size(0))
             top5.update(acc5[0], images.size(0))
-            
+            val_steps+=1
+            log.val_top1(top1.val,val_steps)
+            log.val_top5(top5.val,val_steps)
+            log.val_top1_avg(top1.avg,val_steps)
+            log.val_top5_avg(top5.avg,val_steps)
+            log.val_loss(losses.val,val_steps)
+            log.val_mloss(losses.avg,val_steps)
             # measure elapsed time
             batch_time.update(time.time() - end)
             end = time.time()
 
             if i % args.print_freq == 0:
-                progress.display(i)
+                progress.display(i, args)
 
         # TODO: this should also be done with the ProgressMeter
         print(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'
               .format(top1=top1, top5=top5))
 
-    return top1.avg
+    return top1.avg, val_steps
 
 
 def save_checkpoint(state, is_best, args, filename='checkpoint.pth.tar'):
@@ -417,10 +435,11 @@ class ProgressMeter(object):
         self.meters = meters
         self.prefix = prefix
 
-    def display(self, batch):
+    def display(self, batch, args):
         entries = [self.prefix + self.batch_fmtstr.format(batch)]
         entries += [str(meter) for meter in self.meters]
-        print('\t'.join(entries))
+        elapsed_time = datetime.now() - args.start_time
+        print('\t'.join(entries) + '\tElapsed Time: ' +str(elapsed_time))
 
     def _get_batch_fmtstr(self, num_batches):
         num_digits = len(str(num_batches // 1))
