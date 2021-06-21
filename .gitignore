@@ -3,7 +3,7 @@ logs/*
 checkpoints/*
 weights/*
 models/__pycache__/*
-
+run.sh
 =======
 checkpoints/*
 logs/*
