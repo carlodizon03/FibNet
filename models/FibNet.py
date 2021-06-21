@@ -77,7 +77,7 @@ class fibModule(nn.Module):
             Xt+2 = F[F(Xt)] = F[Xt+1] = a * Xt+1 * (1-Xt+1)
 
         '''
-        return self.logistic(a,self.logistic(a,x))
+        return self.logistic(a,self.logistic(a,x))  
 
     def naive_block_channels_variation(self, blocks, in_channels = 5,  depth = 5, ratio = 0.618):
         channel_list =[in_channels]
