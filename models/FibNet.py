@@ -48,13 +48,15 @@ class classifier(nn.Sequential):
 class fibModule(nn.Module):
     '''
     '''
-    def __init__(self, in_channels = 3, out_channels = 1000, num_blocks = 5, block_depth = 5, use_conv_cat = True):
+    def __init__(self, in_channels = 3, out_channels = 1000, num_blocks = 5, block_depth = 5, use_conv_cat = True, r1 = 0.618, r2 = 3.414):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.num_blocks = num_blocks
         self.block_depth = block_depth
         self.use_conv_cat = use_conv_cat
+        self.r1 = r1
+        self.r2 = r2
         self.dropOut1 = nn.Dropout(0.01)
         self.encoder,self.transition, self.classifier = self.build(in_channels = self.in_channels, num_blocks = self.num_blocks, block_depth = self.block_depth, use_conv_cat = self.use_conv_cat)
 
@@ -78,23 +80,16 @@ class fibModule(nn.Module):
         '''
         return self.logistic(a,self.logistic(a,x))  
 
-    def naive_block_channels_variation(self, blocks, in_channels = 5,  depth = 5, ratio = 0.618):
+    def naive_block_channels_variation(self, blocks, in_channels = 5,  depth = 5):
         channel_list =[in_channels]
-        ratio_list = [ratio]
-        # blocks = [i*2 for i in blocks]
-#        print(blocks)
         for block in blocks:
             depth_ = depth
-            ratio_ = ratio 
+            ratio_ = self.r1 
             while depth_ > 0:
                 val = int( (block * ratio_ * (1 - ratio_))*100)
                 channel_list.append(val)
-                ratio_ = self.logistic(2.4, ratio_)
-                #1.2-3.26gmac
+                ratio_ = self.logistic(self.r2, ratio_)
                 depth_ -= 1
-                ratio_list.append(ratio_)
-        # plt.plot(channel_list)
-        # plt.show()
         return channel_list   
 
     
@@ -207,7 +202,7 @@ class fibModule(nn.Module):
         return self.classifier[0](out)
 
 class FibNet(nn.Module):
-    def __init__(self, in_channels = 3, out_channels = 1, num_blocks = 8, block_depth = 5, pretrained = False, use_conv_cat = True):
+    def __init__(self, in_channels = 3, out_channels = 1, num_blocks = 8, block_depth = 5, pretrained = False, use_conv_cat = True, r1 = 0.618, r2 = 3.414):
         super().__init__()
 
         self.in_channels = in_channels
@@ -215,9 +210,11 @@ class FibNet(nn.Module):
         self.num_blocks  = num_blocks
         self.block_depth = block_depth
         self.use_conv_cat = use_conv_cat
+        self.r1 = r1
+        self.r2 = r2
         self.drop = nn.Dropout(0.01)
         self.conv1 = ConvLayer(3,32,3,2, padding =1)
-        self.encoder = fibModule(in_channels = 32, out_channels = self.out_channels ,num_blocks = self.num_blocks, block_depth = self.block_depth, use_conv_cat = self.use_conv_cat)
+        self.encoder = fibModule(in_channels = 32, out_channels = self.out_channels ,num_blocks = self.num_blocks, block_depth = self.block_depth, use_conv_cat = self.use_conv_cat, r1 = r1 , r2 = r2)
         self._initialize_weights()
 
     def forward(self, inputs):
