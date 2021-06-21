@@ -1,3 +1,10 @@
+<<<<<<< HEAD
+logs/*
+checkpoints/*
+weights/*
+models/__pycache__/*
+
+=======
 checkpoints/*
 logs/*
 weights/*
@@ -146,3 +153,4 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+>>>>>>> 4824be269cf3829743d631823a25643ea326b3f9

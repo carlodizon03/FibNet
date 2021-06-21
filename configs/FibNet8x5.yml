@@ -1,9 +1,13 @@
 arch: FibNet
 args: true
+<<<<<<< HEAD
+batch_size: 128
+=======
 batch_size: 64
+>>>>>>> 4824be269cf3829743d631823a25643ea326b3f9
 block_depth: 5
-n_blocks: 8
-data: ./ILSVRC/Data/CLS-LOC/
+config: configs\config.yml
+data: /media/spacelab/DatasetDisk/ILSVRC/Data/CLS-LOC/
 dist_backend: nccl
 dist_url: tcp://224.66.41.62:23456
 epochs: 250
@@ -12,6 +16,7 @@ gpu: 0
 lr: 0.05
 momentum: 0.9
 multiprocessing_distributed: false
+n_blocks: 8
 pretrained: false
 print_freq: 10
 rank: -1
