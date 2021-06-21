@@ -3,6 +3,11 @@ logs/*
 weights/*
 data/*
 models\__pycache__\*
+hparams.txt
+run.bat
+sumarryscript.py
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
