@@ -45,6 +45,10 @@ parser.add_argument('--nb', '--n-blocks', default=0, type=int,
                     help='number of fibNet blocks', dest='n_blocks')
 parser.add_argument('--bd', '--block-depth', default=0, type=int, 
                     help='FibNet Block Depth', dest='block_depth' )
+parser.add_argument('-r1', default=0.618, type=float, 
+                    help='First ratio for FibNet')
+parser.add_argument('-r2', default=3.414, type=float, 
+                    help='First ratio for FibNet')
 parser.add_argument('--use_conv_cat', default=True, type=bool, dest= 'use_conv_cat',
                     help= 'For FibNet to choose wether using conv_cat (True) or maxpooling2d (False)')
 parser.add_argument('--cl', '--num_class', default=100, type=int, 
@@ -147,7 +151,7 @@ def main_worker(gpu, log, args):
     print("=> creating model '{}'".format(args.arch))
     if args.arch == "FibNet":
         from models.FibNet import FibNet
-        model = FibNet(in_channels = 3, out_channels = args.num_class, num_blocks = args.n_blocks, block_depth = args.block_depth, pretrained=False, use_conv_cat=args.use_conv_cat)
+        model = FibNet(in_channels = 3, out_channels = args.num_class, num_blocks = args.n_blocks, block_depth = args.block_depth, pretrained=False, use_conv_cat=args.use_conv_cat, r1=args.r1, r2=args.r2)
 
     if not torch.cuda.is_available():
         print('using CPU, this will be slow')
