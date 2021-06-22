@@ -90,7 +90,6 @@ class fibModule(nn.Module):
                 channel_list.append(val)
                 ratio_ = self.logistic(self.r2, ratio_)
                 depth_ -= 1
-        print(len(channel_list))
         return channel_list   
 
     
