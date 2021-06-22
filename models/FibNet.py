@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import math
 import matplotlib.pyplot as plt
+
 class ConvLayer(nn.Sequential):
     def __init__(self, in_channels, out_channels, kernel_size = 3, stride = 1, padding = 0,  name = ''):
         super().__init__()
@@ -45,6 +46,24 @@ class classifier(nn.Sequential):
     def forward(self, input):
         return super().forward(input)
 
+
+class upsampling(nn.Sequential):
+    def __init__(self, in_channels, out_channels, skip, option):
+        super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.skip = skip
+        self.option = option
+
+        if(self.option == "sub-pixel"):
+            pass
+        if(self.option == "resize-conv"):
+            pass
+        if(self.option == "transposed"):
+            pass
+        
+    def forward(self, input):
+        return super().forward(input)
 
 class fibModule(nn.Module):
     '''
