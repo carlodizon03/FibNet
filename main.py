@@ -278,7 +278,7 @@ def main_worker(gpu, log, args):
 
     macs, params= get_model_complexity_info(model, image_shape, as_strings=True,
                                            print_per_layer_stat=False, verbose=False)
-    log.h_params(args.__dict__,{'Top_1':acc1, 'Top_5':acc2, 'GMacs': float(macs[:-4]), 'Params': float(params[:-2])},"training_config")
+    log.h_params(args.__dict__,{'Top_1':acc1, 'Top_5':acc2, 'GMacs': float(macs[:-4]), 'Params': float(params[:-2]), 'r1':args.r1, 'r2':args.r2},"training_config")
 
 def train(train_loader, model, criterion, optimizer, epoch, train_steps, log, args):
     batch_time = AverageMeter('Time', ':6.3f')
