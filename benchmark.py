@@ -24,7 +24,8 @@ import numpy as np
 from logger import logger
 from ptflops import get_model_complexity_info
 
-model_names = ["FibNet", "MobileNetv2", "HaRD-Net", "DenseNet", "ResNet"]
+from utils.gradients_check import plot_grad_flow
+model_names = ["FibNet", "MobileNetv2", "HarDNet", "DenseNet121", "DenseNet161", "resnet18", "resnet34"]
 dataset_choices = ["imagenet", "cifar100"]
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
@@ -161,8 +162,23 @@ def main_worker(gpu, log, args):
     elif args.arch == "MobileNetv2":
         from models.MobileNetv2 import MobileNetv2
         model = MobileNetv2(args.num_class)      
-
+    elif args.arch == "HarDNet":
+        from models.HarDNet import HarDNet
+        model = HarDNet(arch = 39, pretrained=False)      
+    elif args.arch == "DenseNet121":
+        from models.DenseNet import densenet121
+        model = densenet121()    
+    elif args.arch == "DenseNet161":
+        from models.DenseNet import densenet161
+        model = densenet161()   
+    elif args.arch == "resnet18":
+        from models.ResNet import resnet18
+        model = resnet18()
+    elif args.arch == "resnet34":
+        from models.ResNet import resnet34
+        model = resnet34()
     if not torch.cuda.is_available():
+        
         print('using CPU, this will be slow')
     elif args.gpu is not None:
         torch.cuda.set_device(args.gpu)
@@ -232,31 +248,32 @@ def main_worker(gpu, log, args):
             num_workers=args.workers, pin_memory=True)
 
     elif args.dataset_name == "cifar100":
+        print("Using {0}".format(args.dataset_name))
         transform = transforms.Compose(
                         [transforms.ToTensor(),transforms.Resize(64),
                         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
                         ])
-
         trainset = datasets.CIFAR100(root = args.data, train = True, transform = transform ,download = True)
         testset = datasets.CIFAR100(root =  args.data, train = False, transform = transform ,download = True)
 
         train_loader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size,
                                                 shuffle=True, num_workers=args.workers,
                                                 pin_memory=True)
-        val_loader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size,
+        val_loader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size,
                                                 shuffle=False,  num_workers=args.workers, 
                                                 pin_memory=True)  
 
     if args.evaluate:
         validate(val_loader, model, criterion, val_steps, log, args)
         return   
-    
+    # plt.figure(figsize=(20,12))
     for epoch in range(args.start_epoch, args.epochs):
         adjust_learning_rate(optimizer, epoch, args)
 
         # train for one epoch
         train_steps =train(train_loader, model, criterion, optimizer, epoch, train_steps, log, args)
-
+        # plt.tight_layout()
+        # plt.savefig("figs/FibNetGradientPlot_Full.png")
         # evaluate on validation set
         acc1, acc2, val_steps = validate(val_loader, model, criterion, val_steps, log, args)
 
@@ -321,6 +338,13 @@ def train(train_loader, model, criterion, optimizer, epoch, train_steps, log, ar
         losses.update(loss.item(), images.size(0))
         top1.update(acc1[0], images.size(0))
         top5.update(acc5[0], images.size(0))
+       
+            
+        # compute gradient and do SGD step
+        optimizer.zero_grad()
+        loss.backward()
+        # plot_grad_flow(model.named_parameters())
+        optimizer.step()
         train_steps+=1
         if(args.log_path is not None):
             #raw
@@ -331,12 +355,6 @@ def train(train_loader, model, criterion, optimizer, epoch, train_steps, log, ar
             log.train_top1_avg(top1.avg, train_steps)
             log.train_top5_avg(top5.avg, train_steps)
             log.train_mloss(losses.avg, train_steps)
-            
-        # compute gradient and do SGD step
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
         # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()

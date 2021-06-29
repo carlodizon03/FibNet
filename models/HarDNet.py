@@ -198,7 +198,7 @@ class HarDNet(nn.Module):
                 nn.AdaptiveAvgPool2d((1,1)),
                 Flatten(),
                 nn.Dropout(drop_rate),
-                nn.Linear(ch, 1000) ))
+                nn.Linear(ch, 100) ))
                 
         #print(self.base)
         
@@ -232,4 +232,21 @@ class HarDNet(nn.Module):
           x = layer(x)
         return x
         
-        
+from torchsummary import  summary
+from ptflops import get_model_complexity_info
+"""Load Cuda """
+use_cuda = torch.cuda.is_available()
+device = torch.device("cuda:0" if use_cuda else "cpu")
+torch.backends.cudnn.benchmark = True
+""""""""""""""""""
+
+f = HarDNet(arch = 39, pretrained=False)
+f.to(device)
+summary(f,(3,64,64))
+macs, params = get_model_complexity_info(f, (3, 64, 64), as_strings=True,
+                                        print_per_layer_stat=False, verbose=False)
+print()
+print('{:<30}  {:<8}'.format('Computational complexity: ', macs))
+print('{:<30}  {:<8}'.format('Number of parameters: ', params))
+
+

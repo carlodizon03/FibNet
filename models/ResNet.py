@@ -1,7 +1,7 @@
 import torch
 from torch import Tensor
 import torch.nn as nn
-from .utils import load_state_dict_from_url
+# from .utils import load_state_dict_from_url
 from typing import Type, Any, Callable, Union, List, Optional
 
 
@@ -147,7 +147,7 @@ class ResNet(nn.Module):
         self,
         block: Type[Union[BasicBlock, Bottleneck]],
         layers: List[int],
-        num_classes: int = 1000,
+        num_classes: int = 100,
         zero_init_residual: bool = False,
         groups: int = 1,
         width_per_group: int = 64,
@@ -376,3 +376,21 @@ def wide_resnet101_2(pretrained: bool = False, progress: bool = True, **kwargs: 
     kwargs['width_per_group'] = 64 * 2
     return _resnet('wide_resnet101_2', Bottleneck, [3, 4, 23, 3],
                    pretrained, progress, **kwargs)
+
+# from torchsummary import  summary
+# from ptflops import get_model_complexity_info
+# """Load Cuda """
+# use_cuda = torch.cuda.is_available()
+# device = torch.device("cuda:0" if use_cuda else "cpu")
+# torch.backends.cudnn.benchmark = True
+# """"""""""""""""""
+
+# f = resnet34()
+# f.to(device)
+# summary(f,(3,64,64))
+# macs, params = get_model_complexity_info(f, (3, 64, 64), as_strings=True,
+#                                         print_per_layer_stat=False, verbose=False)
+# print()
+# print('{:<30}  {:<8}'.format('Computational complexity: ', macs))
+# print('{:<30}  {:<8}'.format('Number of parameters: ', params))
+

@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint as cp
 from collections import OrderedDict
-from .utils import load_state_dict_from_url
+# from .utils import load_state_dict_from_url
 from torch import Tensor
 from typing import Any, List, Tuple
 
@@ -161,7 +161,7 @@ class DenseNet(nn.Module):
         num_init_features: int = 64,
         bn_size: int = 4,
         drop_rate: float = 0,
-        num_classes: int = 1000,
+        num_classes: int = 100,
         memory_efficient: bool = False
     ) -> None:
 
@@ -307,3 +307,20 @@ def densenet201(pretrained: bool = False, progress: bool = True, **kwargs: Any) 
     """
     return _densenet('densenet201', 32, (6, 12, 48, 32), 64, pretrained, progress,
                      **kwargs)
+# from torchsummary import  summary
+# from ptflops import get_model_complexity_info
+# """Load Cuda """
+# use_cuda = torch.cuda.is_available()
+# device = torch.device("cuda:0" if use_cuda else "cpu")
+# torch.backends.cudnn.benchmark = True
+# """"""""""""""""""
+
+# f = densenet161()
+# f.to(device)
+# # summary(f,(3,64,64))
+# macs, params = get_model_complexity_info(f, (3, 64, 64), as_strings=True,
+#                                         print_per_layer_stat=False, verbose=False)
+# print()
+# print('{:<30}  {:<8}'.format('Computational complexity: ', macs))
+# print('{:<30}  {:<8}'.format('Number of parameters: ', params))
+

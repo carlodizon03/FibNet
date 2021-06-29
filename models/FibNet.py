@@ -57,7 +57,7 @@ class fibModule(nn.Module):
         self.use_conv_cat = use_conv_cat
         self.r1 = r1
         self.r2 = r2
-        self.dropOut1 = nn.Dropout(0.01)
+        self.dropOut1 = nn.Dropout(0.2)
         self.encoder,self.transition, self.classifier = self.build(in_channels = self.in_channels, num_blocks = self.num_blocks, block_depth = self.block_depth, use_conv_cat = self.use_conv_cat)
 
     def fibonacci(self,depth):
@@ -238,10 +238,10 @@ class FibNet(nn.Module):
 # from torchsummary import summary
 # from ptflops import get_model_complexity_info
 
-# model = FibNet(3,100,5,3,False,True)
+# model = FibNet(3,1000,8,5,False,True)
 # model.to(device)
-# summary(model, (3, 64, 64))
-# macs, params= get_model_complexity_info(model, (3, 64, 64), as_strings=True,
+# summary(model, (3, 224, 224))
+# macs, params= get_model_complexity_info(model, (3, 224, 224), as_strings=True,
 #                                            print_per_layer_stat=False, verbose=False)
 # print('{:<30}  {:<8}'.format('Computational complexity: ', float(macs[:-4])))#*1e-9))
 # print('{:<30}  {:<8}'.format('Number of parameters: ', float(params[:-2])))#*1e-6))
