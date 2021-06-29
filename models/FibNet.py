@@ -2,7 +2,8 @@ import torch
 import torch.nn as nn
 import math
 import matplotlib.pyplot as plt
-
+from torch.nn.modules.container import Sequential
+import torchvision.transforms.functional as TF
 class ConvLayer(nn.Sequential):
     def __init__(self, in_channels, out_channels, kernel_size = 3, stride = 1, padding = 0,  name = ''):
         super().__init__()
@@ -46,38 +47,112 @@ class classifier(nn.Sequential):
     def forward(self, input):
         return super().forward(input)
 
+class Sub_Pixel_Conv(nn.Module):
+    def __init__(self, in_channels, scale_factor = 2):
+        super().__init__()
+        self.scale_factor = scale_factor
+        # Feature mapping
+        self.feature_maps = nn.Sequential(
+            nn.Conv2d(in_channels, in_channels*2, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
 
-class upsampling(nn.Sequential):
-    def __init__(self, in_channels, out_channels, skip, option):
+            nn.Conv2d(in_channels*2, in_channels, kernel_size=3, stride=1, padding=1),
+            nn.ReLU()
+        )
+        # Sub-pixel convolution layer
+        self.sub_pixel = nn.Sequential(
+            nn.Conv2d(in_channels, in_channels * (self.scale_factor ** 2), kernel_size=3, stride=1, padding=1),
+            nn.PixelShuffle(self.scale_factor),
+            nn.Sigmoid()
+        )
+    def forward(self, input, skip = None,):
+        out = self.feature_maps(input)
+        out = self.sub_pixel(out)
+        if skip is not None:     
+            #TODO pad or not pad?             
+            # if skip.size(2) == 7:
+            #     out = TF.pad(out,[0,1,1,0])                       
+            out = torch.cat([out, skip], 1)
+          
+        return out
+
+class Conv_Transpose(nn.Sequential):
+    def __init__(self, in_channels, scale_factor = 2, kernel_size = 2, stride = 2, padding = 0):
+        super().__init__()
+        self.scale_factor = scale_factor
+        self.in_channels = in_channels
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.padding = padding
+        self.decoder = ConvLayer(self.in_channels,self.in_channels/self.scale_factor,kernel_size=3,stride=1,padding=1, name = 'decoder')
+        self.conv_transpose = nn.ConvTranspose2d(self.in_channels, self.out_channels, kernel_size = self.kernel_size, stride =  self.stride, padding = self.padding)
+
+    def forward(self, input, skip = None):
+        out = self.decoder(input)
+        out = self.conv_transpose(out)
+        if skip is not None:
+            #TODO pad or not pad?             
+            out = torch.cat((out,skip),1)
+        return out
+
+class Resize_Conv(nn.Sequential):
+    def __init__(self, in_channels, scale_factor, kernel_size = 3, stride = 1, padding = 0, mode = 'bilinear'):
+        self.in_channels = in_channels
+        self.scale_factor = scale_factor
+        self.kernel_size = kernel_size
+        self.stride = stride 
+        self.padding = padding
+        self.mode = mode
+        self.upsample = nn.Upsample(scale_factor = self.scale_factor, mode = self.mode)
+        self.pad = nn.ReflectionPad2d(1),
+        self.conv = nn.Conv2d(self.in_channels, self.in_channels/scale_factor, self.kernel_size, self.stride, self.padding)
+
+    def forward(self, input, skip = None):
+        out = self.upsample(input)
+        out = self.conv(out)
+        if skip is not None:
+           #TODO pad or not pad?             
+            out = torch.cat((out,skip),1)
+        return out
+
+class Upsample(nn.Sequential):
+    def __init__(self, in_channels, scale_factor = 2, option = 'sub-pixel', mode = 'bilinear', stride = 2, kernel_size = 2, padding = 0,  activation = None):
         super().__init__()
         self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.skip = skip
+        self.stride = stride
+        self.kernel_size = kernel_size
+        self.padding = padding
+        self.scale_factor = scale_factor
         self.option = option
-
+        self.mode = mode
         if(self.option == "sub-pixel"):
-            pass
+            self.add_module("sub-pixel", Sub_Pixel_Conv(self.in_channels, self.scale_factor)) 
         if(self.option == "resize-conv"):
-            pass
+            self.add_module("resize-conv", Resize_Conv(self.in_channels, self.scale_factor, self.kernel_size, self.stride, self.padding, self.mode))
         if(self.option == "transposed"):
-            pass
-        
-    def forward(self, input):
-        return super().forward(input)
+            self.add_module("transposed", Conv_Transpose(self.in_channels, self.scale_factor, self.kernel_size, self.stride, self.padding))
+    def forward(self, input, skip = None):
+        return super().forward(input, skip)
 
 class fibModule(nn.Module):
     '''
     '''
-    def __init__(self, in_channels = 3, out_channels = 1000, num_blocks = 5, block_depth = 5, use_conv_cat = True):
+    def __init__(self, in_channels = 3, out_channels = 1000, num_blocks = 5, block_depth = 5, use_conv_cat = True, mode = "classification"):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.num_blocks = num_blocks
         self.block_depth = block_depth
         self.use_conv_cat = use_conv_cat
+        self.mode = mode
         self.dropOut1 = nn.Dropout(0.01)
-        self.encoder,self.transition, self.classifier = self.build(in_channels = self.in_channels, num_blocks = self.num_blocks, block_depth = self.block_depth, use_conv_cat = self.use_conv_cat)
-
+        if(self.mode == "classification"):
+            print("building ", self.mode)
+            self.encoder,self.transition, self.classifier = self.build(in_channels = self.in_channels, num_blocks = self.num_blocks, block_depth = self.block_depth, use_conv_cat = self.use_conv_cat, mode = self.mode)
+        elif(self.mode == 'segmentation'):
+            print("building ", self.mode)
+            self.encoder, self.transition = self.build(in_channels = self.in_channels, num_blocks = self.num_blocks, block_depth = self.block_depth, use_conv_cat = self.use_conv_cat, mode = self.mode)
+    
     def fibonacci(self,depth):
         f = []
         for i in range(1,depth+1):
@@ -109,7 +184,7 @@ class fibModule(nn.Module):
             while depth_ > 0:
                 val = int( (block * ratio_ * (1 - ratio_))*100)
                 channel_list.append(val)
-                ratio_ = self.logistic(3.414, ratio_)
+                ratio_ = self.logistic(2.4, ratio_)
                 #1.2-3.26gmac
                 depth_ -= 1
                 ratio_list.append(ratio_)
@@ -119,11 +194,12 @@ class fibModule(nn.Module):
 
     
 
-    def build(self, in_channels = 3, num_blocks = 5, block_depth = 5, use_conv_cat = True):
+    def build(self, in_channels = 3, num_blocks = 5, block_depth = 5, use_conv_cat = True, mode = "classification"):
         blocks_channel_list= self.naive_block_channels_variation(blocks = self.fibonacci(num_blocks),  in_channels = in_channels, depth = block_depth)
         encoder = nn.ModuleList()
         transition = nn.ModuleList()
-        cls = nn.ModuleList()
+        if(mode == "classification"):
+            cls = nn.ModuleList()
         for block in range(num_blocks):
             
             in_channels = blocks_channel_list[block*block_depth]
@@ -165,19 +241,24 @@ class fibModule(nn.Module):
                                         name = 'block_'+str(block)+'_layer_'+str(layer)+'_'))
                 #transition
                 if layer == block_depth-1:
+                     if(block == num_blocks-1 and mode == "segmentation"):
+                        return encoder, transition
                      transition.append(ConvLayer(in_channels = blocks_channel_list[idx] + out_channels,
                                             out_channels = blocks_channel_list[(block+1)*block_depth],
                                             kernel_size = 3,
                                             stride = 2,
                                             padding = 1,
                                             name = 'block_'+str(block)+'_layer_'+str(layer)+'_transition_'))
+                                            
                 #break for the last index
                 if idx +1 == block_depth * num_blocks:
-                    cls.append(classifier(in_channels = blocks_channel_list[(block+1)*block_depth], out_channels = self.out_channels))
-                    break
+                    if(mode == "classification"):
+                        cls.append(classifier(in_channels = blocks_channel_list[(block+1)*block_depth], out_channels = self.out_channels))
+                        return encoder, transition, cls
+                    
 
-        return encoder, transition, cls
-        
+
+                    
     def forward(self, inputs):
         x = inputs 
         for block in range(self.num_blocks):
@@ -211,17 +292,24 @@ class fibModule(nn.Module):
                 if layer == self.block_depth-1:
                     out = torch.cat((out,cat_out),1)
 
+                    #last block transition
                     if(block == self.num_blocks-1):
-                        out = self.transition[block](out)
-                        out = self.dropOut1(out)
+                        if(self.mode == 'segmentation'):
+                            return out
+                        else:
+                            out = self.transition[block](out)
+                            out = self.dropOut1(out)
 
                     else:
                         x = self.transition[block](out)
                         x = self.dropOut1(x)
-        return self.classifier[0](out)
+        if(self.mode == "classification"):
+            return self.classifier[0](out)
+        elif(self.mode == 'segmentation'):
+            return out
 
 class FibNet(nn.Module):
-    def __init__(self, in_channels = 3, out_channels = 1, num_blocks = 8, block_depth = 5, pretrained = False, use_conv_cat = True):
+    def __init__(self, in_channels = 3, out_channels = 1, num_blocks = 8, block_depth = 5, mode = "classification", pretrained = False, use_conv_cat = True):
         super().__init__()
 
         self.in_channels = in_channels
@@ -229,9 +317,12 @@ class FibNet(nn.Module):
         self.num_blocks  = num_blocks
         self.block_depth = block_depth
         self.use_conv_cat = use_conv_cat
+        self.pretrained = pretrained
+        self.mode = mode
         self.drop = nn.Dropout(0.01)
         self.conv1 = ConvLayer(3,32,3,2, padding =1)
-        self.encoder = fibModule(in_channels = 32, out_channels = self.out_channels ,num_blocks = self.num_blocks, block_depth = self.block_depth, use_conv_cat = self.use_conv_cat)
+        self.encoder = fibModule(in_channels = 32, out_channels = self.out_channels ,num_blocks = self.num_blocks, block_depth = self.block_depth, mode = self.mode, use_conv_cat = self.use_conv_cat)
+        
         self._initialize_weights()
 
     def forward(self, inputs):
@@ -253,18 +344,19 @@ class FibNet(nn.Module):
             elif isinstance(m, nn.Linear):
                 m.weight.data.normal_(0, 0.01)
                 m.bias.data.zero_()
-# """Load Cuda """
-# use_cuda = torch.cuda.is_available()
-# device = torch.device("cuda:0" if use_cuda else "cpu")
-# torch.backends.cudnn.benchmark = True
 
-# from torchsummary import summary
-# from ptflops import get_model_complexity_info
+"""Load Cuda """
+use_cuda = torch.cuda.is_available()
+device = torch.device("cuda:0" if use_cuda else "cpu")
+torch.backends.cudnn.benchmark = True
 
-# model = FibNet(3,100,5,3,False,True)
-# model.to(device)
-# summary(model, (3, 64, 64))
-# macs, params= get_model_complexity_info(model, (3, 64, 64), as_strings=True,
-#                                            print_per_layer_stat=False, verbose=False)
-# print('{:<30}  {:<8}'.format('Computational complexity: ', float(macs[:-4])))#*1e-9))
-# print('{:<30}  {:<8}'.format('Number of parameters: ', float(params[:-2])))#*1e-6))
+from torchsummary import summary
+from ptflops import get_model_complexity_info
+
+model = FibNet(in_channels = 3, out_channels = 1, num_blocks = 5, block_depth = 5, mode = "segmentation", pretrained = False, use_conv_cat= True)
+model.to(device)
+summary(model, (3, 384, 384))
+macs, params= get_model_complexity_info(model, (3,  384, 384), as_strings=True,
+                                           print_per_layer_stat=False, verbose=False)
+print('{:<30}  {:<8}'.format('Computational complexity: ', float(macs[:-4])))#*1e-9))
+print('{:<30}  {:<8}'.format('Number of parameters: ', float(params[:-2])))#*1e-6))
