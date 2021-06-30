@@ -57,7 +57,7 @@ def Pair(img, mask):
 def Image(img, label = None):
     img = img.to('cpu')
     img = torch.transpose(img,1,0)
-    img = torchvision.utils.make_grid(img[:10])
+    img = torchvision.utils.make_grid(img)
     print(img.shape)
 
     img = img.detach().numpy()

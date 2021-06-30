@@ -4,6 +4,7 @@ import torchvision
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+from utils.UnNorm import UnNormalize
 class Create(object):
 
     def __init__(self, path):
@@ -11,6 +12,7 @@ class Create(object):
         self.str_timestamp = str("{0}-{1}-{2}--{3}-{4}-{5}/".format(self.timestamp.month, self.timestamp.day,self.timestamp.year,self.timestamp.hour,self.timestamp.minute,self.timestamp.second))
         self.log_dir =  os.path.join(path, self.str_timestamp)
         self.writer = SummaryWriter(self.log_dir)
+        self.unnorm = UnNormalize()
 
     def custom_scalar(self, path_name, value, step):
         self.writer.add_scalar(path_name,value,step)

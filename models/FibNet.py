@@ -4,6 +4,8 @@ import math
 import matplotlib.pyplot as plt
 from torch.nn.modules.container import Sequential
 import torchvision.transforms.functional as TF
+from itertools import islice
+from collections import OrderedDict
 class ConvLayer(nn.Sequential):
     def __init__(self, in_channels, out_channels, kernel_size = 3, stride = 1, padding = 0,  name = ''):
         super().__init__()
@@ -76,15 +78,16 @@ class Sub_Pixel_Conv(nn.Module):
         return out
 
 class Conv_Transpose(nn.Module):
-    def __init__(self, in_channels, scale_factor = 2, kernel_size = 2, stride = 2, padding = 0):
+    def __init__(self, in_channels, out_channels, scale_factor = 2, kernel_size = 2, stride = 2, padding = 0):
         super().__init__()
         self.scale_factor = scale_factor
         self.in_channels = in_channels
+        self.out_channels = out_channels
         self.kernel_size = kernel_size
         self.stride = stride
         self.padding = padding
-        self.decoder = ConvLayer(self.in_channels,self.in_channels/self.scale_factor,kernel_size=3,stride=1,padding=1, name = 'decoder')
-        self.conv_transpose = nn.ConvTranspose2d(self.in_channels, self.out_channels, kernel_size = self.kernel_size, stride =  self.stride, padding = self.padding)
+        self.decoder = ConvLayer(self.in_channels,self.in_channels*self.scale_factor,kernel_size=3,stride=1,padding=1, name = 'decoder')
+        self.conv_transpose = nn.ConvTranspose2d(self.in_channels*self.scale_factor, self.out_channels, kernel_size = self.kernel_size, stride =  self.stride, padding = self.padding)
 
     def forward(self, input, skip = None):
         out = self.decoder(input)
@@ -106,7 +109,7 @@ class Resize_Conv(nn.Module):
         self.mode = mode
         self.up = nn.Upsample(scale_factor = self.scale_factor, mode = self.mode)
         self.pad = nn.ReflectionPad2d(1),
-        self.conv = nn.Conv2d(self.in_channels, self.out_channels, self.kernel_size, self.stride, self.padding)
+        self.conv = ConvLayer(self.in_channels, self.out_channels, self.kernel_size, self.stride, self.padding)
 
     def forward(self, input, skip = None):
         out = self.up(input)
@@ -132,7 +135,7 @@ class decoder(nn.Sequential):
         if(self.option == "resize-conv"):
             self.upsample = Resize_Conv(self.in_channels, self.out_channels, self.scale_factor, self.kernel_size, self.stride, self.padding, self.mode)
         if(self.option == "transposed"):
-            self.upsample = Conv_Transpose(self.in_channels, self.scale_factor, self.kernel_size, self.stride, self.padding)
+            self.upsample = Conv_Transpose(self.in_channels, self.out_channels, self.scale_factor, self.kernel_size, self.stride, self.padding)
     def forward(self, input, skip = None):
         return self.upsample(input,skip)
 
@@ -244,6 +247,13 @@ class fibModule(nn.Module):
                 #transition
                 if layer == block_depth-1:
                      if(block == num_blocks-1 and mode == "segmentation"):
+                        transition.append(ConvLayer(in_channels = blocks_channel_list[idx] + out_channels,
+                                            out_channels = 512,
+                                            kernel_size = 3,
+                                            stride = 1,
+                                            padding = 1,
+                                            name = 'block_'+str(block)+'_layer_'+str(layer)+'_transition_'))
+                                            
                         return encoder, transition
                      transition.append(ConvLayer(in_channels = blocks_channel_list[idx] + out_channels,
                                             out_channels = blocks_channel_list[(block+1)*block_depth],
@@ -297,9 +307,9 @@ class fibModule(nn.Module):
 
                     #last block transition
                     if(block == self.num_blocks-1):
-                        if(self.mode == 'segmentation'):
-                            return out
-                        else:
+                        # if(self.mode == 'segmentation'):
+                        #     return out
+                        # else:
                             out = self.transition[block](out)
                             out = self.dropOut1(out)
 
@@ -312,7 +322,7 @@ class fibModule(nn.Module):
             return out
 
 class FibNet(nn.Module):
-    def __init__(self, in_channels = 3, out_channels = 1, num_blocks = 8, block_depth = 5, mode = "classification", pretrained = False, use_conv_cat = True):
+    def __init__(self, in_channels = 3, out_channels = 1, num_blocks = 8, block_depth = 5, mode = "classification", pretrained = False, use_conv_cat = True, backend_path = None):
         super().__init__()
 
         self.in_channels = in_channels
@@ -321,29 +331,42 @@ class FibNet(nn.Module):
         self.block_depth = block_depth
         self.use_conv_cat = use_conv_cat
         self.pretrained = pretrained
+        self.backend_path = backend_path
         self.mode = mode
         self.drop = nn.Dropout(0.01)
+        self.drop2 = nn.Dropout(0.2)
         self.conv1 = ConvLayer(3,32,3,2, padding =1)
         self.encoder = fibModule(in_channels = 32, out_channels = self.out_channels ,num_blocks = self.num_blocks, block_depth = self.block_depth, mode = self.mode, use_conv_cat = self.use_conv_cat)
-        self.upsample1 = decoder(242, out_channels = 121, scale_factor=2, kernel_size=3,stride=1,padding=1, option="resize-conv")
-        self.upsample2 = decoder(121, out_channels = 60, scale_factor=2, kernel_size=3,stride=1,padding=1, option="resize-conv")
-        self.upsample3 = decoder(60, out_channels = 30, scale_factor=2, kernel_size=3,stride=1,padding=1, option="resize-conv")
-        self.upsample4 = decoder(30, out_channels = 15, scale_factor=2, kernel_size=3,stride=1,padding=1, option="resize-conv")
-        self.upsample5 = decoder(15, out_channels = 3, scale_factor=2, kernel_size=3,stride=1,padding=1, option="resize-conv")
-
-        self._initialize_weights()
-
+        
+        self.upsample1 = decoder(512, out_channels = 256, scale_factor=2, kernel_size=2,stride=2,padding=0, option="transposed")
+        self.upsample2 = decoder(256, out_channels = 128, scale_factor=2, kernel_size=2,stride=2,padding=0, option="transposed")
+        self.upsample3 = decoder(128, out_channels = 64, scale_factor=2, kernel_size=2,stride=2,padding=0, option="transposed")
+        self.upsample4 = decoder(64, out_channels = 32, scale_factor=2, kernel_size=2,stride=2,padding=0, option="transposed")
+        self.upsample5 = decoder(32, out_channels = self.out_channels, scale_factor=2, kernel_size=2,stride=2,padding=0, option="transposed")
+        self.sigmoid = nn.Sigmoid()
+        
+        if(self.pretrained):
+                assert self.backend_path is not None, "Provide path to checkpoint or weight"
+                checkpoint = torch.load(self.backend_path)['state_dict']
+                self.load_state_dict(OrderedDict(islice(checkpoint.items(), 0,len(checkpoint.items())-14)), strict = False)
+        else:
+            self._initialize_weights()
     def forward(self, inputs):
         inputs = self.conv1(inputs)
         inputs = self.drop(inputs)
         outputs = self.encoder(inputs)
+        # outputs = self.drop2(outputs)
         outputs = self.upsample1(outputs)
+        # outputs = self.drop2(outputs)
         outputs = self.upsample2(outputs)
+        # outputs = self.drop2(outputs)
         outputs = self.upsample3(outputs)
+        # outputs = self.drop2(outputs)
         outputs = self.upsample4(outputs)
+        # outputs = self.drop2(outputs)
         outputs = self.upsample5(outputs)
 
-        return outputs
+        return self.sigmoid(outputs)
 
     def _initialize_weights(self):
         for m in self.modules():
@@ -368,7 +391,7 @@ class FibNet(nn.Module):
 # from torchsummary import summary
 # from ptflops import get_model_complexity_info
 
-# model = FibNet(in_channels = 3, out_channels = 3, num_blocks = 5, block_depth = 5, mode = "segmentation", pretrained = False, use_conv_cat= True)
+# model = FibNet(in_channels = 3, out_channels = 21, num_blocks = 5, block_depth = 5, mode = "segmentation", pretrained = False, use_conv_cat= True)
 # model.to(device)
 # summary(model, (3, 384, 384))
 # macs, params= get_model_complexity_info(model, (3,  384, 384), as_strings=True,
