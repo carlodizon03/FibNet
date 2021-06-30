@@ -63,7 +63,6 @@ class Sub_Pixel_Conv(nn.Module):
         self.sub_pixel = nn.Sequential(
             nn.Conv2d(in_channels, in_channels * (self.scale_factor ** 2), kernel_size=3, stride=1, padding=1),
             nn.PixelShuffle(self.scale_factor),
-            nn.Sigmoid()
         )
     def forward(self, input, skip = None,):
         out = self.feature_maps(input)
@@ -73,10 +72,10 @@ class Sub_Pixel_Conv(nn.Module):
             # if skip.size(2) == 7:
             #     out = TF.pad(out,[0,1,1,0])                       
             out = torch.cat([out, skip], 1)
-          
+           
         return out
 
-class Conv_Transpose(nn.Sequential):
+class Conv_Transpose(nn.Module):
     def __init__(self, in_channels, scale_factor = 2, kernel_size = 2, stride = 2, padding = 0):
         super().__init__()
         self.scale_factor = scale_factor
@@ -95,30 +94,33 @@ class Conv_Transpose(nn.Sequential):
             out = torch.cat((out,skip),1)
         return out
 
-class Resize_Conv(nn.Sequential):
-    def __init__(self, in_channels, scale_factor, kernel_size = 3, stride = 1, padding = 0, mode = 'bilinear'):
+class Resize_Conv(nn.Module):
+    def __init__(self, in_channels, out_channels, scale_factor, kernel_size = 3, stride = 1, padding = 0, mode = 'bilinear'):
+        super().__init__()
         self.in_channels = in_channels
+        self.out_channels = out_channels
         self.scale_factor = scale_factor
         self.kernel_size = kernel_size
         self.stride = stride 
         self.padding = padding
         self.mode = mode
-        self.upsample = nn.Upsample(scale_factor = self.scale_factor, mode = self.mode)
+        self.up = nn.Upsample(scale_factor = self.scale_factor, mode = self.mode)
         self.pad = nn.ReflectionPad2d(1),
-        self.conv = nn.Conv2d(self.in_channels, self.in_channels/scale_factor, self.kernel_size, self.stride, self.padding)
+        self.conv = nn.Conv2d(self.in_channels, self.out_channels, self.kernel_size, self.stride, self.padding)
 
     def forward(self, input, skip = None):
-        out = self.upsample(input)
+        out = self.up(input)
         out = self.conv(out)
         if skip is not None:
            #TODO pad or not pad?             
             out = torch.cat((out,skip),1)
         return out
 
-class Upsample(nn.Sequential):
-    def __init__(self, in_channels, scale_factor = 2, option = 'sub-pixel', mode = 'bilinear', stride = 2, kernel_size = 2, padding = 0,  activation = None):
+class decoder(nn.Sequential):
+    def __init__(self, in_channels, out_channels, scale_factor = 2, option = 'sub-pixel', mode = 'bilinear', stride = 2, kernel_size = 2, padding = 0,  activation = None):
         super().__init__()
         self.in_channels = in_channels
+        self.out_channels = out_channels
         self.stride = stride
         self.kernel_size = kernel_size
         self.padding = padding
@@ -126,13 +128,13 @@ class Upsample(nn.Sequential):
         self.option = option
         self.mode = mode
         if(self.option == "sub-pixel"):
-            self.add_module("sub-pixel", Sub_Pixel_Conv(self.in_channels, self.scale_factor)) 
+            self.upsample = Sub_Pixel_Conv(self.in_channels, self.scale_factor)
         if(self.option == "resize-conv"):
-            self.add_module("resize-conv", Resize_Conv(self.in_channels, self.scale_factor, self.kernel_size, self.stride, self.padding, self.mode))
+            self.upsample = Resize_Conv(self.in_channels, self.out_channels, self.scale_factor, self.kernel_size, self.stride, self.padding, self.mode)
         if(self.option == "transposed"):
-            self.add_module("transposed", Conv_Transpose(self.in_channels, self.scale_factor, self.kernel_size, self.stride, self.padding))
+            self.upsample = Conv_Transpose(self.in_channels, self.scale_factor, self.kernel_size, self.stride, self.padding)
     def forward(self, input, skip = None):
-        return super().forward(input, skip)
+        return self.upsample(input,skip)
 
 class fibModule(nn.Module):
     '''
@@ -290,6 +292,7 @@ class fibModule(nn.Module):
 
                 #identity of ld-1
                 if layer == self.block_depth-1:
+                    #transition concat
                     out = torch.cat((out,cat_out),1)
 
                     #last block transition
@@ -322,13 +325,24 @@ class FibNet(nn.Module):
         self.drop = nn.Dropout(0.01)
         self.conv1 = ConvLayer(3,32,3,2, padding =1)
         self.encoder = fibModule(in_channels = 32, out_channels = self.out_channels ,num_blocks = self.num_blocks, block_depth = self.block_depth, mode = self.mode, use_conv_cat = self.use_conv_cat)
-        
+        self.upsample1 = decoder(242, out_channels = 121, scale_factor=2, kernel_size=3,stride=1,padding=1, option="resize-conv")
+        self.upsample2 = decoder(121, out_channels = 60, scale_factor=2, kernel_size=3,stride=1,padding=1, option="resize-conv")
+        self.upsample3 = decoder(60, out_channels = 30, scale_factor=2, kernel_size=3,stride=1,padding=1, option="resize-conv")
+        self.upsample4 = decoder(30, out_channels = 15, scale_factor=2, kernel_size=3,stride=1,padding=1, option="resize-conv")
+        self.upsample5 = decoder(15, out_channels = 3, scale_factor=2, kernel_size=3,stride=1,padding=1, option="resize-conv")
+
         self._initialize_weights()
 
     def forward(self, inputs):
         inputs = self.conv1(inputs)
         inputs = self.drop(inputs)
         outputs = self.encoder(inputs)
+        outputs = self.upsample1(outputs)
+        outputs = self.upsample2(outputs)
+        outputs = self.upsample3(outputs)
+        outputs = self.upsample4(outputs)
+        outputs = self.upsample5(outputs)
+
         return outputs
 
     def _initialize_weights(self):
@@ -345,18 +359,19 @@ class FibNet(nn.Module):
                 m.weight.data.normal_(0, 0.01)
                 m.bias.data.zero_()
 
-"""Load Cuda """
-use_cuda = torch.cuda.is_available()
-device = torch.device("cuda:0" if use_cuda else "cpu")
-torch.backends.cudnn.benchmark = True
 
-from torchsummary import summary
-from ptflops import get_model_complexity_info
+# """Load Cuda """
+# use_cuda = torch.cuda.is_available()
+# device = torch.device("cuda:0" if use_cuda else "cpu")
+# torch.backends.cudnn.benchmark = True
 
-model = FibNet(in_channels = 3, out_channels = 1, num_blocks = 5, block_depth = 5, mode = "segmentation", pretrained = False, use_conv_cat= True)
-model.to(device)
-summary(model, (3, 384, 384))
-macs, params= get_model_complexity_info(model, (3,  384, 384), as_strings=True,
-                                           print_per_layer_stat=False, verbose=False)
-print('{:<30}  {:<8}'.format('Computational complexity: ', float(macs[:-4])))#*1e-9))
-print('{:<30}  {:<8}'.format('Number of parameters: ', float(params[:-2])))#*1e-6))
+# from torchsummary import summary
+# from ptflops import get_model_complexity_info
+
+# model = FibNet(in_channels = 3, out_channels = 3, num_blocks = 5, block_depth = 5, mode = "segmentation", pretrained = False, use_conv_cat= True)
+# model.to(device)
+# summary(model, (3, 384, 384))
+# macs, params= get_model_complexity_info(model, (3,  384, 384), as_strings=True,
+#                                            print_per_layer_stat=False, verbose=False)
+# print('{:<30}  {:<8}'.format('Computational complexity: ', float(macs[:-4])))#*1e-9))
+# print('{:<30}  {:<8}'.format('Number of parameters: ', float(params[:-2])))#*1e-6))
