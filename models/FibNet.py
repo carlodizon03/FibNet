@@ -7,14 +7,16 @@ from torch.nn.modules.container import Sequential
 import torchvision.transforms.functional as TF
 from itertools import islice
 from collections import OrderedDict
-from models.core.ConvLayer import ConvLayer
-from models.core.Encoder import Encoder
-from models.core.Decoder import Decoder
-
+# from models.core.ConvLayer import ConvLayer
+# from models.core.Encoder import Encoder
+# from models.core.Decoder import Decoder
+from core.ConvLayer import ConvLayer
+from core.Encoder import Encoder
+from core.Decoder import Decoder
 class FibNet(nn.Module):
     def __init__(self, in_channels = 3, out_channels = 1, num_blocks = 8, block_depth = 5, 
                 mode = "classification", use_conv_cat = True, upsampling_mode = "sub-pixel",
-                pretrained_backend = False, backend_path = None):
+                pretrained_backend = False, backend_path = None, is_depthwise = False):
         super().__init__()
 
         self.in_channels = in_channels
@@ -26,19 +28,23 @@ class FibNet(nn.Module):
         self.backend_path = backend_path
         self.mode = mode
         self.upsampling_mode = upsampling_mode
+        self.is_depthwise = is_depthwise
         self.drop = nn.Dropout(0.2)
         self.drop2 = nn.Dropout(0.2)
 
         self.conv1 = ConvLayer(3,32,3,2, padding =1)
         if(mode == "segmentation"):
             self.encoder = Encoder(in_channels = 32, out_channels = self.out_channels ,num_blocks = self.num_blocks,
-                                    block_depth = self.block_depth, mode = self.mode, use_conv_cat = self.use_conv_cat)
+                                    block_depth = self.block_depth, mode = self.mode, use_conv_cat = self.use_conv_cat,
+                                    is_depthwise = self.is_depthwise)
 
             self.decoder = Decoder(in_channels = self.encoder.block_channels_variation[-1], out_channels = self.out_channels,
-                                    num_blocks = self.num_blocks, block_depth = self.block_depth, mode = self.upsampling_mode)
+                                    num_blocks = self.num_blocks, block_depth = self.block_depth, mode = self.upsampling_mode,
+                                    is_depthwise = self.is_depthwise)
         elif(mode == "classification"):
             self.encoder = Encoder(in_channels = 32, out_channels = self.out_channels ,num_blocks = self.num_blocks,
-                                    block_depth = self.block_depth, mode = self.mode, use_conv_cat = self.use_conv_cat)
+                                    block_depth = self.block_depth, mode = self.mode, use_conv_cat = self.use_conv_cat,
+                                    is_depthwise = self.is_depthwise)
 
         if(self.pretrained_backend):
                 assert self.backend_path is not None, "Provide path to checkpoint or weight"
@@ -79,7 +85,8 @@ class FibNet(nn.Module):
 # from torchsummary import summary
 # from ptflops import get_model_complexity_info
 
-# model = FibNet(in_channels = 3, out_channels = 10, num_blocks = 6, block_depth = 8, mode = "segmentation", pretrained = False, use_conv_cat= True)
+# model = FibNet(in_channels = 3, out_channels = 5, num_blocks = 2, block_depth = 2, mode = "segmentation",
+#                  pretrained_backend = False,upsampling_mode = "resize-conv", use_conv_cat= True, is_depthwise=False)
 # model.to(device)
 # summary(model, (3, 720, 960))
 # macs, params= get_model_complexity_info(model, (3,   720, 960), as_strings=True,

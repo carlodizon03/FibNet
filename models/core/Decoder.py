@@ -9,18 +9,18 @@ class Decoder(nn.Module):
     """
         mode -> 'sub-pixel', 'transpose-conv','resize-conv'
     """
-    def __init__(self, in_channels = 64, out_channels = 1000, num_blocks = 5, block_depth = 5, mode = 'sub-pixel'):
+    def __init__(self, in_channels = 64, out_channels = 1000, num_blocks = 5, block_depth = 5, mode = 'sub-pixel', is_depthwise = False):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.num_blocks = num_blocks
         self.block_depth = block_depth
         self.mode = mode
-        self.dropOut1 = nn.Dropout(0.2)
+        self.is_depthwise = is_depthwise
+        self.dropout = nn.Dropout(0.2)
         self.block_channels_variation = Channel_Variations().get(in_channels = self.in_channels, n_blocks = self.num_blocks, depth = block_depth)[::-1] #revese the list
         self.decoder = self.build()
         self._initialize_weights()
-
     def _initialize_weights(self):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -50,12 +50,14 @@ class Decoder(nn.Module):
             idx_out = (block+1)*self.block_depth
             ch_in = self.block_channels_variation[idx_in]
             ch_out = self.block_channels_variation[idx_out]
-            decoder.append(upsampler(ch_in,ch_out,scale_factor=2))
-        decoder.append(ConvLayer(ch_out, self.out_channels,padding=1))
+            decoder.append(upsampler(ch_in,ch_out,scale_factor=2,is_depthwise=self.is_depthwise))
+        decoder.append(ConvLayer(ch_out, self.out_channels,padding=1,is_dws=self.is_depthwise))
         return decoder
 
     def forward(self, input, skip = None):
         
         for block in range(self.num_blocks):
             input  = self.decoder[block](input)
+            input  = self.dropout(input)
+             
         return self.decoder[self.num_blocks](input)

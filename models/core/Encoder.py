@@ -4,7 +4,8 @@ from .Channel_Variations import Channel_Variations
 from .ConvLayer import ConvLayer
 from .Classifier import Classifier
 class Encoder(nn.Module):
-    def __init__(self, in_channels = 3, out_channels = 1000, num_blocks = 5, block_depth = 5, use_conv_cat = True, mode = "classification"):
+    def __init__(self, in_channels = 3, out_channels = 1000, num_blocks = 5, block_depth = 5,
+                 use_conv_cat = True, mode = "classification", is_depthwise = False):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -12,6 +13,7 @@ class Encoder(nn.Module):
         self.block_depth = block_depth
         self.use_conv_cat = use_conv_cat
         self.mode = mode
+        self.is_depthwise = is_depthwise
         self.dropOut1 = nn.Dropout(0.2)
         self.block_channels_variation = Channel_Variations().get(in_channels = self.in_channels, n_blocks = self.num_blocks, depth = block_depth)
 
@@ -39,6 +41,7 @@ class Encoder(nn.Module):
                 encoder.append(ConvLayer(in_channels, 
                                         in_channels,
                                         padding = 1,
+                                        is_dws= self.is_depthwise,
                                         name = 'block_'+str(block)+'_layer_0_cat_'))
             #use Maxpooling
             else:
@@ -48,6 +51,7 @@ class Encoder(nn.Module):
             encoder.append(ConvLayer(in_channels,
                                     out_channels, 
                                     padding = 1,
+                                    is_dws= self.is_depthwise,
                                     name = 'block_'+str(block)+'_layer_0_'))
             for layer in range(1,self.block_depth):
                 idx =  block*self.block_depth+layer
@@ -59,6 +63,7 @@ class Encoder(nn.Module):
                     encoder.append(ConvLayer(in_channels = self.block_channels_variation[idx],
                                             out_channels = self.block_channels_variation[idx],
                                             padding = 1,
+                                            is_dws= self.is_depthwise,
                                             name = 'block_'+str(block)+'_layer_'+str(layer)+'_cat_'))
                 #use Maxpooling
                 else:
@@ -67,6 +72,7 @@ class Encoder(nn.Module):
                 encoder.append(ConvLayer(in_channels = in_channels,
                                         out_channels = out_channels,
                                         padding = 1,
+                                        is_dws= self.is_depthwise,
                                         name = 'block_'+str(block)+'_layer_'+str(layer)+'_'))
                 #transition
                 if layer == self.block_depth-1:
@@ -76,6 +82,7 @@ class Encoder(nn.Module):
                                             kernel_size = 3,
                                             stride = 1,
                                             padding = 1,
+                                            is_dws= self.is_depthwise,
                                             name = 'block_'+str(block)+'_layer_'+str(layer)+'_transition_'))
                         return encoder, transition
 
@@ -84,6 +91,7 @@ class Encoder(nn.Module):
                                             kernel_size = 3,
                                             stride = 2,
                                             padding = 1,
+                                            is_dws= self.is_depthwise,
                                             name = 'block_'+str(block)+'_layer_'+str(layer)+'_transition_'))
                                             
                 #break for the last index

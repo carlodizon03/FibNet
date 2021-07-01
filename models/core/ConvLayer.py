@@ -5,7 +5,7 @@ class ConvLayer(nn.Sequential):
     def __init__(self, in_channels, out_channels, kernel_size = 3, stride = 1, padding = 0, is_dws = False,  name = ''):
         super().__init__()
         if(is_dws):
-            self.add_module(dws(in_channels,out_channels,padding))
+            self.add_module(name+'dws', dws(in_channels,out_channels,padding))
         else:
             self.add_module(name+'conv2d',nn.Conv2d(in_channels,out_channels,kernel_size,stride,padding, bias = False))
             self.add_module('bn', nn.BatchNorm2d(out_channels))
