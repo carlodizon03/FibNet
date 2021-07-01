@@ -8,8 +8,8 @@ from torch.utils.data import DataLoader
 from data.dataloaders.CamVid import Generator as CamVid
 from metrics import ClassIoU
 from logger import logger
+from metrics.score import *
 from utils import enet_weighting
-
 if __name__ == '__main__':
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -37,14 +37,17 @@ if __name__ == '__main__':
                             drop_last   = True 
                         )
     loaders = {'train': train_loader, 'valid': val_loader}
-    
-    model = FibNet(in_channels = 3, out_channels = 12, num_blocks =5, block_depth = 5, mode = "segmentation", pretrained = False, use_conv_cat= True).to(device)
 
-    class_weights = enet_weighting.calculate(train_loader,12)
+    num_class = len(train_set.labels_of_interest())
+
+    model = FibNet(in_channels = 3, out_channels = num_class, num_blocks =5, block_depth = 5, 
+                    mode = "segmentation", pretrained = False, use_conv_cat= True).to(device)
+
+    class_weights = enet_weighting.calculate(train_loader,num_class)
    
     criterion = nn.CrossEntropyLoss(weight=class_weights).to(device)
     metric    = ClassIoU.IoU(class_labels_list = train_set.labels_of_interest())
-
+    score = SegmentationMetric(num_class)
     optimizer = optim.Adam(model.parameters(), lr=0.0001)
     
     log = logger.Create('/media/spacelab/New Volume/TrainLogs/Training/FibNet_CamVid/unitTest')
@@ -76,6 +79,9 @@ if __name__ == '__main__':
                         train_pbar.set_postfix({'Loss': np.mean(train_loss)})
                         log.train_loss(np.mean(train_loss), train_steps)
                 iou_dict, iou_mean = metric(preds,encoded_masks)
+                pix_acc, mIoU = score.update(preds,encoded_masks)
+                log.custom_scalar("PixelAccuracy/training", pix_acc, epoch)
+                log.custom_scalar("ScoreMIOU/training", mIoU, epoch)
                 log.train_iou_per_class(iou_dict, epoch)
                 log.train_mIoU(iou_mean,epoch)
                 log.display_train_batch(images,masks,train_set.decode_mask(preds),epoch, unNorm = True)
@@ -93,6 +99,9 @@ if __name__ == '__main__':
                         val_pbar.set_postfix({'Loss': np.mean(valid_loss)})
                         log.val_loss(np.mean(valid_loss), valid_steps)
                 iou_dict, iou_mean = metric(preds,encoded_masks)
+                pix_acc, mIoU = score.update(preds,encoded_masks)
+                log.custom_scalar("PixelAccuracy/validation", pix_acc, epoch)
+                log.custom_scalar("ScoreMIOU/validation", mIoU, epoch)
                 log.val_iou_per_class(iou_dict, epoch)
                 log.val_miou(iou_mean,epoch)
                 log.display_val_batch(images, masks, val_set.decode_mask(preds), epoch, unNorm = True)
