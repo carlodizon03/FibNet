@@ -51,7 +51,7 @@ class Decoder(nn.Module):
             ch_in = self.block_channels_variation[idx_in]
             ch_out = self.block_channels_variation[idx_out]
             decoder.append(upsampler(ch_in,ch_out,scale_factor=2,is_depthwise=self.is_depthwise))
-        decoder.append(ConvLayer(ch_out, self.out_channels,padding=1,is_dws=self.is_depthwise))
+        decoder.append(ConvLayer(ch_out, self.out_channels, stride = 1, padding = 1,is_dws=self.is_depthwise))
         return decoder
 
     def forward(self, input, skip = None):
