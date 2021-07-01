@@ -94,14 +94,14 @@ class Generator(torch.utils.data.Dataset):
             if random.random() > 0.5:
                 image = self.adjust_gamma(image,mask)
         if('resize' in self.transforms):
-            image = TF.resize(image, (224,224))
-            mask = TF.resize(mask, (224,224))
+            image = TF.resize(image, (480,480))
+            mask = TF.resize(mask, (480,480))
         if('fcrop' in self.transforms):
             image = TF.five_crop(image,(224,224))
             mask = TF.five_crop(mask, (224,224))
         if('center_crop' in self.transforms):
-            image = TF.center_crop(image, (224,224))
-            mask = TF.center_crop(mask, (224,224))
+            image = TF.center_crop(image, (480,480))
+            mask = TF.center_crop(mask, (480,480))
        
         mask = self.pil_to_long_tensor(mask)
         image = TF.to_tensor(image)
