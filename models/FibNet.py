@@ -9,10 +9,12 @@ from itertools import islice
 from collections import OrderedDict
 from core.ConvLayer import ConvLayer
 from core.Encoder import Encoder
-# from core.Decoder import *
+from core.Decoder import Decoder
 
 class FibNet(nn.Module):
-    def __init__(self, in_channels = 3, out_channels = 1, num_blocks = 8, block_depth = 5, mode = "classification", pretrained = False, use_conv_cat = True, backend_path = None):
+    def __init__(self, in_channels = 3, out_channels = 1, num_blocks = 8, block_depth = 5, 
+                mode = "classification", use_conv_cat = True, upsampling_mode = "sub-pixel",
+                pretrained = False, backend_path = None):
         super().__init__()
 
         self.in_channels = in_channels
@@ -23,22 +25,35 @@ class FibNet(nn.Module):
         self.pretrained = pretrained
         self.backend_path = backend_path
         self.mode = mode
+        self.upsampling_mode = upsampling_mode
         self.drop = nn.Dropout(0.2)
         self.drop2 = nn.Dropout(0.2)
+
         self.conv1 = ConvLayer(3,32,3,2, padding =1)
-        self.encoder = Encoder(in_channels = 32, out_channels = self.out_channels ,num_blocks = self.num_blocks, block_depth = self.block_depth, mode = self.mode, use_conv_cat = self.use_conv_cat)
-        
-        
+        if(mode == "segmentation"):
+            self.encoder = Encoder(in_channels = 32, out_channels = self.out_channels ,num_blocks = self.num_blocks,
+                                    block_depth = self.block_depth, mode = self.mode, use_conv_cat = self.use_conv_cat)
+
+            self.decoder = Decoder(in_channels = self.encoder.block_channels_variation[-1], out_channels = self.out_channels,
+                                    num_blocks = self.num_blocks, block_depth = self.block_depth, mode = self.upsampling_mode)
+        elif(mode == "classification"):
+            self.encoder = Encoder(in_channels = 32, out_channels = self.out_channels ,num_blocks = self.num_blocks,
+                                    block_depth = self.block_depth, mode = self.mode, use_conv_cat = self.use_conv_cat)
+
         if(self.pretrained):
                 assert self.backend_path is not None, "Provide path to checkpoint or weight"
                 checkpoint = torch.load(self.backend_path)['state_dict']
                 self.load_state_dict(OrderedDict(islice(checkpoint.items(), 0,len(checkpoint.items())-14)), strict = False)
         else:
             self._initialize_weights()
+
+
     def forward(self, inputs):
         inputs = self.conv1(inputs)
         inputs = self.drop(inputs)
         outputs = self.encoder(inputs)
+        if(self.mode == "segmentation"):
+            outputs = self.decoder(outputs)
         return outputs
 
     def _initialize_weights(self):
@@ -56,18 +71,18 @@ class FibNet(nn.Module):
                 m.bias.data.zero_()
 
 
-"""Load Cuda """
-use_cuda = torch.cuda.is_available()
-device = torch.device("cuda:0" if use_cuda else "cpu")
-torch.backends.cudnn.benchmark = True
+# """Load Cuda """
+# use_cuda = torch.cuda.is_available()
+# device = torch.device("cuda:0" if use_cuda else "cpu")
+# torch.backends.cudnn.benchmark = True
 
-from torchsummary import summary
-from ptflops import get_model_complexity_info
+# from torchsummary import summary
+# from ptflops import get_model_complexity_info
 
-model = FibNet(in_channels = 3, out_channels = 3, num_blocks = 5, block_depth = 5, mode = "segmentation", pretrained = False, use_conv_cat= True)
-model.to(device)
-summary(model, (3, 960, 960))
-macs, params= get_model_complexity_info(model, (3,   960, 960), as_strings=True,
-                                           print_per_layer_stat=False, verbose=False)
-print('{:<30}  {:<8}'.format('Computational complexity: ', float(macs[:-4])))#*1e-9))
-print('{:<30}  {:<8}'.format('Number of parameters: ', float(params[:-2])))#*1e-6))
+# model = FibNet(in_channels = 3, out_channels = 10, num_blocks = 6, block_depth = 8, mode = "segmentation", pretrained = False, use_conv_cat= True)
+# model.to(device)
+# summary(model, (3, 720, 960))
+# macs, params= get_model_complexity_info(model, (3,   720, 960), as_strings=True,
+#                                            print_per_layer_stat=False, verbose=False)
+# print('{:<30}  {:<8}'.format('Computational complexity: ', float(macs[:-4])))#*1e-9))
+# print('{:<30}  {:<8}'.format('Number of parameters: ', float(params[:-2])))#*1e-6))
