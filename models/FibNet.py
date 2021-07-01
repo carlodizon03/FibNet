@@ -7,14 +7,14 @@ from torch.nn.modules.container import Sequential
 import torchvision.transforms.functional as TF
 from itertools import islice
 from collections import OrderedDict
-from core.ConvLayer import ConvLayer
-from core.Encoder import Encoder
-from core.Decoder import Decoder
+from models.core.ConvLayer import ConvLayer
+from models.core.Encoder import Encoder
+from models.core.Decoder import Decoder
 
 class FibNet(nn.Module):
     def __init__(self, in_channels = 3, out_channels = 1, num_blocks = 8, block_depth = 5, 
                 mode = "classification", use_conv_cat = True, upsampling_mode = "sub-pixel",
-                pretrained = False, backend_path = None):
+                pretrained_backend = False, backend_path = None):
         super().__init__()
 
         self.in_channels = in_channels
@@ -22,7 +22,7 @@ class FibNet(nn.Module):
         self.num_blocks  = num_blocks
         self.block_depth = block_depth
         self.use_conv_cat = use_conv_cat
-        self.pretrained = pretrained
+        self.pretrained_backend = pretrained_backend
         self.backend_path = backend_path
         self.mode = mode
         self.upsampling_mode = upsampling_mode
@@ -40,7 +40,7 @@ class FibNet(nn.Module):
             self.encoder = Encoder(in_channels = 32, out_channels = self.out_channels ,num_blocks = self.num_blocks,
                                     block_depth = self.block_depth, mode = self.mode, use_conv_cat = self.use_conv_cat)
 
-        if(self.pretrained):
+        if(self.pretrained_backend):
                 assert self.backend_path is not None, "Provide path to checkpoint or weight"
                 checkpoint = torch.load(self.backend_path)['state_dict']
                 self.load_state_dict(OrderedDict(islice(checkpoint.items(), 0,len(checkpoint.items())-14)), strict = False)

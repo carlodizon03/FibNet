@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import math
 from .Channel_Variations import Channel_Variations
 from .ConvLayer import ConvLayer
 from .Upsampling import *
@@ -18,7 +19,22 @@ class Decoder(nn.Module):
         self.dropOut1 = nn.Dropout(0.2)
         self.block_channels_variation = Channel_Variations().get(in_channels = self.in_channels, n_blocks = self.num_blocks, depth = block_depth)[::-1] #revese the list
         self.decoder = self.build()
+        self._initialize_weights()
 
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                m.weight.data.normal_(0, math.sqrt(2. / n))
+                if m.bias is not None:
+                    m.bias.data.zero_()
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+            elif isinstance(m, nn.Linear):
+                m.weight.data.normal_(0, 0.01)
+                m.bias.data.zero_()
+    
     def build(self):
         decoder = nn.ModuleList()
 
