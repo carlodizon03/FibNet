@@ -12,16 +12,15 @@ class Channel_Variations(object):
   def logistic(self, a,x):
     return a * x * (1-x)
   
-  def get(self, in_channels = 3, n_blocks=5,  depth = 5, ratio = 0.618):
+  def get(self, in_channels = 3, n_blocks=5,  depth = 5, ratio = 0.618, is_reverse = False):
     blocks_list = self.fibonacci(n_blocks)
     channel_list =[in_channels]
     ratio_list = [ratio]
-    print(blocks_list)
     for block in blocks_list:
         depth_ = depth
         ratio_ = ratio 
         while depth_ > 0:
-            val = int( (block * ratio_ * (1 - ratio_))*50)
+            val = int( (block * ratio_ * (1 - ratio_))*30)
             channel_list.append(val)
             ratio_ = self.logistic(2.4, ratio_)
             depth_ -= 1

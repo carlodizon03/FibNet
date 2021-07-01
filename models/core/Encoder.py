@@ -17,25 +17,25 @@ class Encoder(nn.Module):
 
         if(self.mode == "classification"):
             print("building ", self.mode)
-            self.encoder,self.transition, self.classifier = self.build(in_channels = self.in_channels, num_blocks = self.num_blocks, block_depth = self.block_depth, use_conv_cat = self.use_conv_cat, mode = self.mode)
+            self.encoder,self.transition, self.classifier = self.build()
         elif(self.mode == 'segmentation'):
             print("building ", self.mode)
-            self.encoder, self.transition = self.build(in_channels = self.in_channels, num_blocks = self.num_blocks, block_depth = self.block_depth, use_conv_cat = self.use_conv_cat, mode = self.mode)
+            self.encoder, self.transition = self.build()
     
 
-    def build(self, in_channels = 3, num_blocks = 5, block_depth = 5, use_conv_cat = True, mode = "classification"):
-        blocks_channel_list = self.block_channels_variation
+    def build(self):
+        
         encoder = nn.ModuleList()
         transition = nn.ModuleList()
-        if(mode == "classification"):
+        if(self.mode == "classification"):
             cls = nn.ModuleList()
-        for block in range(num_blocks):
+        for block in range(self.num_blocks):
             
-            in_channels = blocks_channel_list[block*block_depth]
-            out_channels = blocks_channel_list[block*block_depth+1]
+            in_channels = self.block_channels_variation[block*self.block_depth]
+            out_channels = self.block_channels_variation[block*self.block_depth+1]
 
             #Conv2d to match the shape for concatenation
-            if(use_conv_cat):
+            if(self.use_conv_cat):
                 encoder.append(ConvLayer(in_channels, 
                                         in_channels,
                                         padding = 1,
@@ -49,15 +49,15 @@ class Encoder(nn.Module):
                                     out_channels, 
                                     padding = 1,
                                     name = 'block_'+str(block)+'_layer_0_'))
-            for layer in range(1,block_depth):
-                idx =  block*block_depth+layer
-                in_channels = blocks_channel_list[idx] + blocks_channel_list[idx-1]
-                out_channels = blocks_channel_list[idx+1]
+            for layer in range(1,self.block_depth):
+                idx =  block*self.block_depth+layer
+                in_channels = self.block_channels_variation[idx] + self.block_channels_variation[idx-1]
+                out_channels = self.block_channels_variation[idx+1]
 
                 #Conv2d to match the shape for concatenation
-                if(use_conv_cat):
-                    encoder.append(ConvLayer(in_channels = blocks_channel_list[idx],
-                                            out_channels = blocks_channel_list[idx],
+                if(self.use_conv_cat):
+                    encoder.append(ConvLayer(in_channels = self.block_channels_variation[idx],
+                                            out_channels = self.block_channels_variation[idx],
                                             padding = 1,
                                             name = 'block_'+str(block)+'_layer_'+str(layer)+'_cat_'))
                 #use Maxpooling
@@ -69,27 +69,27 @@ class Encoder(nn.Module):
                                         padding = 1,
                                         name = 'block_'+str(block)+'_layer_'+str(layer)+'_'))
                 #transition
-                if layer == block_depth-1:
-                     if(block == num_blocks-1 and mode == "segmentation"):
-                        transition.append(ConvLayer(in_channels = blocks_channel_list[idx] + out_channels,
-                                            out_channels = 128,
+                if layer == self.block_depth-1:
+                     if(block == self.num_blocks-1 and self.mode == "segmentation"):
+                        transition.append(ConvLayer(in_channels = self.block_channels_variation[idx] + out_channels,
+                                            out_channels = self.block_channels_variation[(block+1)*self.block_depth],
                                             kernel_size = 3,
                                             stride = 1,
                                             padding = 1,
                                             name = 'block_'+str(block)+'_layer_'+str(layer)+'_transition_'))
-                                            
                         return encoder, transition
-                     transition.append(ConvLayer(in_channels = blocks_channel_list[idx] + out_channels,
-                                            out_channels = blocks_channel_list[(block+1)*block_depth],
+
+                     transition.append(ConvLayer(in_channels = self.block_channels_variation[idx] + out_channels,
+                                            out_channels = self.block_channels_variation[(block+1)*self.block_depth],
                                             kernel_size = 3,
                                             stride = 2,
                                             padding = 1,
                                             name = 'block_'+str(block)+'_layer_'+str(layer)+'_transition_'))
                                             
                 #break for the last index
-                if idx +1 == block_depth * num_blocks:
-                    if(mode == "classification"):
-                        cls.append(Classifier(in_channels = blocks_channel_list[(block+1)*block_depth], out_channels = self.out_channels))
+                if idx +1 == self.block_depth * self.num_blocks:
+                    if(self.mode == "classification"):
+                        cls.append(Classifier(in_channels = self.block_channels_variation[(block+1)*self.block_depth], out_channels = self.out_channels))
                         return encoder, transition, cls
 
   

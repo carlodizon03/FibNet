@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
-from ConvLayer import ConvLayer
+from .ConvLayer import ConvLayer
+
 
 class Sub_Pixel_Conv(nn.Module):
     def __init__(self, in_channels, out_channels, scale_factor = 2):
@@ -18,7 +19,8 @@ class Sub_Pixel_Conv(nn.Module):
             nn.Conv2d(self.in_channels, self.in_channels * (self.scale_factor ** 2), kernel_size=3, stride=1, padding=1),
             nn.PixelShuffle(self.scale_factor),
         )
-        self.conv_subpix_out = ConvLayer(self.in_channels * (self.scale_factor ** 2), self.out_channels, kernel_size=3, stride=1,padding=1, name='sub-pix-conv-out')
+        in_ch = int((self.in_channels * (self.scale_factor ** 2))/(self.scale_factor**2))
+        self.conv_subpix_out = ConvLayer(in_ch, self.out_channels, kernel_size=3, stride=1,padding=1, name='sub-pix-conv-out')
     def forward(self, input, skip = None,):
         out = self.feature_maps(input)
         out = self.sub_pixel(out)
