@@ -7,12 +7,10 @@ from torch.nn.modules.container import Sequential
 import torchvision.transforms.functional as TF
 from itertools import islice
 from collections import OrderedDict
-# from models.core.ConvLayer import ConvLayer
-# from models.core.Encoder import Encoder
-# from models.core.Decoder import Decoder
-from core.ConvLayer import ConvLayer
-from core.Encoder import Encoder
-from core.Decoder import Decoder
+from models.core.ConvLayer import ConvLayer
+from models.core.Encoder import Encoder
+from models.core.Decoder import Decoder
+
 class FibNet(nn.Module):
     def __init__(self, in_channels = 3, out_channels = 1, num_blocks = 8, block_depth = 5, 
                 mode = "classification", use_conv_cat = True, upsampling_mode = "sub-pixel",
@@ -85,11 +83,11 @@ class FibNet(nn.Module):
 # from torchsummary import summary
 # from ptflops import get_model_complexity_info
 
-# model = FibNet(in_channels = 3, out_channels = 5, num_blocks = 2, block_depth = 2, mode = "segmentation",
-#                  pretrained_backend = False,upsampling_mode = "resize-conv", use_conv_cat= True, is_depthwise=False)
+# model = FibNet(in_channels = 3, out_channels = 12, num_blocks = 5, block_depth = 5, mode = "segmentation",
+#                  pretrained_backend = False,upsampling_mode = "resize-conv", use_conv_cat= True, is_depthwise=True)
 # model.to(device)
-# summary(model, (3, 720, 960))
-# macs, params= get_model_complexity_info(model, (3,   720, 960), as_strings=True,
+# summary(model, (3, 480, 480))
+# macs, params= get_model_complexity_info(model, (3,   480, 480), as_strings=True,
 #                                            print_per_layer_stat=False, verbose=False)
 # print('{:<30}  {:<8}'.format('Computational complexity: ', float(macs[:-4])))#*1e-9))
 # print('{:<30}  {:<8}'.format('Number of parameters: ', float(params[:-2])))#*1e-6))
