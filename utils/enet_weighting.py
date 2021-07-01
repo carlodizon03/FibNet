@@ -17,12 +17,10 @@ def calculate(dataloader, num_classes, c=1.02):
     class_count = 0
     total = 0
     for _, batch in enumerate(dataloader):
-        gt_mask = batch
-        # gt_mask = gt_mask.to('cpu').numpy()
-        print(gt_mask)
-        flat_mask = gt_mask.flatten()
+        image, encoded_gt_mask, mask = batch
+        encoded_gt_mask = encoded_gt_mask.to('cpu').numpy()
+        flat_mask = encoded_gt_mask.flatten()
         class_count += np.bincount(flat_mask, minlength = num_classes)
-        # print(len(flat_mask.shape))
         total += len(flat_mask)
     propensity_score = class_count / total
     class_weights = 1 / (np.log(c + propensity_score))
