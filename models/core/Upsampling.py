@@ -10,22 +10,28 @@ class Sub_Pixel_Conv(nn.Module):
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.is_depthwise =  is_depthwise
+        self.dropout = nn.Dropout(0.2)
         # Feature mapping
         self.feature_maps = nn.Sequential(
             ConvLayer(self.in_channels, self.in_channels*2, kernel_size=5, stride=1, padding=2,name='sub_pix',is_dws=self.is_depthwise),
+            nn.Dropout(0.2),
             ConvLayer(self.in_channels*2, self.in_channels, kernel_size=3, stride=1, padding=1,name='sub_pix',is_dws=self.is_depthwise)
         )
         # Sub-pixel convolution layer
         self.sub_pixel = nn.Sequential(
             ConvLayer(self.in_channels, self.in_channels * (self.scale_factor ** 2), kernel_size=3, stride=1, padding=1, is_dws = self.is_depthwise),
+            nn.Dropout(0.2),
             nn.PixelShuffle(self.scale_factor),
         )
         in_ch = int((self.in_channels * (self.scale_factor ** 2))/(self.scale_factor**2))
         self.conv_subpix_out = ConvLayer(in_ch, self.out_channels, kernel_size=3, stride=1,padding=1, name='sub-pix-conv-out',is_dws=self.is_depthwise)
     def forward(self, input, skip = None,):
         out = self.feature_maps(input)
+        out = self.dropout(out)
         out = self.sub_pixel(out)
+        out = self.dropout(out)
         out = self.conv_subpix_out(out)
+
         if skip is not None:     
             #TODO pad or not pad?             
             # if skip.size(2) == 7:
