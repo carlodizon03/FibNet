@@ -65,44 +65,46 @@ if __name__ == '__main__':
                 model.train()
                 train_pbar = tqdm(loaders[phase], total = len(loaders[phase]), desc = "Training")
                 for idx, batch in enumerate(train_pbar):
-                    images, encoded_masks, masks = batch
-                    images, encoded_masks = images.to(device), encoded_masks.to(device)
+                    images, masks = batch
+                    images, masks = images.to(device), masks.to(device)
                     optimizer.zero_grad()
                     with torch.set_grad_enabled(phase == "train"):
                         preds = model(images)
-                        loss = criterion(preds, encoded_masks)
+                        loss = criterion(preds, masks)
                         loss.backward()
                         optimizer.step()
                         train_loss.append(loss.item())
                         train_steps += 1
                         train_pbar.set_postfix({'Loss': np.mean(train_loss)})
                         log.train_loss(np.mean(train_loss), train_steps)
-                pix_acc, mIoU = score.update(preds,encoded_masks)
+                pix_acc, mIoU = score.update(preds,masks)
                 log.custom_scalar("PixelAccuracy/training", pix_acc, epoch)
                 log.custom_scalar("ScoreMIOU/training", mIoU, epoch)
-                log.display_train_batch(images,masks,train_set.decode_mask(preds),epoch, unNorm = True)
+                log.display_train_batch(images,masks,preds,epoch, unNorm = True)
             if phase == "valid":
                 model.eval()
                 val_pbar = tqdm(loaders[phase], total = len(loaders[phase]), desc = "Validation")
                 for idx, batch in enumerate(val_pbar):
-                    images, encoded_masks, masks = batch
-                    images, encoded_masks = images.to(device), encoded_masks.to(device)
+                    images, masks = batch
+                    images, masks = images.to(device), masks.to(device)
                     with torch.set_grad_enabled(phase == "train"):
                         preds = model(images)
-                        loss = criterion(preds, encoded_masks)
+                        loss = criterion(preds, masks)
                         valid_loss.append(loss.item())
                         valid_steps += 1
                         val_pbar.set_postfix({'Loss': np.mean(valid_loss)})
                         log.val_loss(np.mean(valid_loss), valid_steps)
-                pix_acc, mIoU = score.update(preds,encoded_masks)
+                pix_acc, mIoU = score.update(preds,masks)
                 log.custom_scalar("PixelAccuracy/validation", pix_acc, epoch)
                 log.custom_scalar("ScoreMIOU/validation", mIoU, epoch)
-                log.display_val_batch(images, masks, val_set.decode_mask(preds), epoch, unNorm = True)
+                log.display_val_batch(images, masks, preds, epoch, unNorm = True)
                 
                 if np.mean(valid_loss) < best_validation_loss:
                     best_validation_loss = np.mean(valid_loss)
                     torch.save({'epoch': epoch,
                                 'model_state_dict': model.state_dict(),
                                 'optimizer_state_dict': optimizer.state_dict(),
-                                'loss': best_validation_loss},
-                                'weights/FIbNet_Cloud38.pt')
+                                'loss': best_validation_loss,
+                                'pixAcc': pix_acc,
+                                'mIoU': mIoU},
+                                'weights/FibNet_Cloud38.pt')
