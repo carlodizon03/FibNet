@@ -16,3 +16,6 @@ pip3 install tqdm
 
 pip3 install ptflops
 
+**Run Training**
+
+python main.py --arch FibNet  --ds ImageNet --n-blocks 5 --  --block-depth 3  --r1 0.68 --r2 0.24 --num_class 1000 --batch-size 256 --learning-rate 0.0005 --gpu 0
